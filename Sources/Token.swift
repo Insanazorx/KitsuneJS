@@ -1,10 +1,13 @@
-public enum KeywordType {
-    case `if`, `else`, `while`, `for`, `return`
-    case `func`, `var`, `let`, `const`
-    case `class`, `struct`, `enum`, `import`
-} 
+public enum TokenType : Equatable {
+    case identifier(String)
+    case number(Int)
+    case string(String)
+    case boolean(Bool)
+    
+    case `if`, `else`, `while`, `for`, `return`, `do` , `throw`, `try`
+    case `function`, `var`, `let`, `const`, `of`, `in`, `switch`, `export`
+    case `class`, `struct`, `enum`, `import`, `break`, `continue`, `async`
 
-public enum OperatorType {
     case equal, notEqual, lessThan, greaterThan
     case lessThanOrEqual, greaterThanOrEqual
     case logicalAnd, logicalOr
@@ -14,9 +17,7 @@ public enum OperatorType {
     case dot, ampersand, pipe
     case caret, percent, tilde
     case strictEqual, strictNotEqual
-}
 
-public enum punctuationType {
     case leftParen, rightParen
     case leftBrace, rightBrace
     case leftBracket, rightBracket
@@ -24,19 +25,34 @@ public enum punctuationType {
 }
 
 public struct Token: CustomStringConvertible, Equatable {
+    public var description: String { "Token(\(lexType), \"\(lexeme)\")" }
     
     public let lexType: Lexer.LexemeType
     public let lexeme: String
 
-    public var keywordType: KeywordType? {
-        guard lexType == .keyword else { return nil }
+    public var tokenType: TokenType? {
+        switch lexType {
+        case .identifier:
+            return .identifier(lexeme)
+        case .number:
+            return .number(Int(lexeme) ?? 0)
+        case .string:
+            return .string(lexeme)
+        default:
+            break;
+        }
         switch lexeme {
+            //literals
+            case "true": return .boolean(true)
+            case "false": return .boolean(false)
+            //keywords
             case "if": return .if
             case "else": return .else
             case "while": return .while
+            case "do": return .do
             case "for": return .for
             case "return": return .return
-            case "func": return .func
+            case "function": return .function   
             case "var": return .var
             case "let": return .let
             case "const": return .const
@@ -44,12 +60,15 @@ public struct Token: CustomStringConvertible, Equatable {
             case "struct": return .struct
             case "enum": return .enum
             case "import": return .import
-            default: return nil
-        }
-    }
-    public var operatorType: OperatorType? {
-        guard lexType == .operatorSymbol else { return nil }
-        switch lexeme {
+            case "break": return .break
+            case "continue": return .continue
+            case "async": return .async
+            case "switch": return .switch
+            case "throw": return .throw
+            case "try": return .try
+            case "export": return .export
+            
+            // operators        
             case "==": return .equal
             case "!=": return .notEqual
             case "<": return .lessThan
@@ -78,12 +97,7 @@ public struct Token: CustomStringConvertible, Equatable {
             case "~": return .tilde
             case "===": return .strictEqual
             case "!==": return .strictNotEqual
-            default: return nil
-        }
-    }
-    public var punctuationType: punctuationType? {
-        guard lexType == .punctuation else { return nil }
-        switch lexeme {
+            // punctuation
             case "(": return .leftParen
             case ")": return .rightParen
             case "{": return .leftBrace
@@ -93,12 +107,8 @@ public struct Token: CustomStringConvertible, Equatable {
             case ";": return .semicolon
             case ":": return .colon
             case ",": return .comma
-            default: return nil
+            default: fatalError("Unknown token lexeme: \(lexeme)")
         }
     }
-    public var description: String { "Token(\(lexType), \"\(lexeme)\")" }
-}
-
-extension Token {
     
-}
+    }

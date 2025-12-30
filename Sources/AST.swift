@@ -1,30 +1,41 @@
-enum ASTNode {
+// AST.swift
+
+// Top-level node wrapper
+public indirect enum ASTNode {
     case expression(Expression)
     case statement(Statement)
     case declaration(Declaration)
     case program(Program)
 }
 
-struct Program {
-    var body: [Statement]
+// Program
+public indirect enum Program {
+    case program(body: [Statement])
 }
 
-indirect enum Expression {
+// Expressions
+public indirect enum Expression {
     case literal(Literal)
     case identifier(String)
-    case binaryExpression(BinaryExpression)
-    case unaryExpression(UnaryExpression)
-    case assignmentExpression(AssignmentExpression)
-    case callExpression(CallExpression)
-    case memberExpression(MemberExpression)
-    case arrayLiteral(ArrayLiteral)
-    case objectLiteral(ObjectLiteral)
-    case arrowFunction(ArrowFunction)
+
+    case binary(left: Expression, operator_: TokenType, right: Expression)
+    case unary(operator_: TokenType, argument: Expression, isPrefix: Bool)
+
+    case assignment(left: Expression, operator_: TokenType, right: Expression)
+
+    case call(callee: Expression, arguments: [Expression])
+    case member(object: Expression, property: String)
+
+    case arrayLiteral(elements: [Expression])
+    case objectLiteral(properties: [String: Expression])
+
+    case arrowFunction(params: [String], body: Expression)
+
     case parenthesized(Expression)
 }
 
-struct Literal {
-    enum LiteralType {
+// Literals
+    public indirect enum Literal {
         case int(Int)
         case float(Double)
         case string(String)
@@ -32,222 +43,110 @@ struct Literal {
         case null
         case undefined
     }
-    let type: LiteralType
-}
 
 
-indirect enum Statement {
-    case blockStatement(BlockStatement)
-    case declarationStatement(DeclarationStatement)
-    case expressionsStatement(ExpressionStatement)
-    case ifStatement(IfStatement)
-    case whileStatement(WhileStatement)
-    case doWhileStatement(DoWhileStatement)
-    case forStatement(ForStatement)
-    case forInStatement(ForInStatement)
-    case forOfStatement(ForOfStatement)
-    case returnStatement(ReturnStatement)
-    case breakStatement(BreakStatement)
-    case continueStatement(ContinueStatement)
-    case throwStatement(ThrowStatement)
-    case tryStatement(TryStatement)
-    case switchStatement(SwitchStatement)
-    case labelledStatement(LabelledStatement)
-    case caseStatement(CaseStatement)
+// Statements
+public indirect enum Statement {
+    case block(statements: [Statement?])
+
+    // These replace DeclarationStatement / ExpressionStatement structs
+    case declarationStatement(Declaration)
+    case expressionStatement(Expression)
+
+    case ifStatement(test: Expression, consequent: Statement, alternate: Statement?)
+    case whileStatement(test: Expression, body: Statement)
+    case doWhileStatement(body: Statement, test: Expression)
+
+    case forStatement(
+        initDecl: Declaration?,
+        initExpr: Expression?,
+        test: Expression?,
+        update: Expression?,
+        body: Statement
+    )
+
+    case forInStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
+    case forOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
+
+    case returnStatement(argument: Expression?)
+    case breakStatement(label: String?)
+    case continueStatement(label: String?)
+
+    case throwStatement(argument: Expression)
+
+
+    case tryStatement(
+        block: Statement,
+        catchDeclarations: [String],
+        handler: Statement?,
+        finalizer: Statement?
+    )
+
+    case switchStatement(discriminant: Expression, cases: [CaseStatement])
+
+    case labelledStatement(label: String, body: Statement)
+
     case empty
 }
 
-
-enum Declaration {
-    case function(FunctionDeclaration)
-    case `class`(ClassDeclaration)
-    case lexical(LexicalDeclaration)    // let / const
-    case variableDecl(VariableDeclaration)  // var
-    case importDecl(ImportDeclaration)
-    case exportDecl(ExportDeclaration)
+// Case statements for switch
+public indirect enum CaseStatement {
+    case `case`(test: Expression?, consequent: [Statement])
 }
 
-struct BinaryExpression {
-    var left: Expression
-    var operator_: OperatorType
-    var right: Expression
-}
-struct UnaryExpression {
-    var operator_: OperatorType
-    var argument: Expression
-    var isPrefix: Bool
+// Declarations
+public indirect enum Declaration {
+    case function(
+        name: String,
+        params: Statement,
+        body: Statement, // typically .block
+        isAsync: Bool,
+        isGenerator: Bool
+    )
+
+    case `class`(
+        name: String,
+        superClass: String?,
+        body: [Declaration]
+    )
+
+    // let / const
+    case lexical(kind: LexicalKind, declarations: [String], assignments: [Expression]?)
+
+    // var
+    case variable(declarations: [String])
+
+    case importDecl(module: String, specifiers: [String])
+    case exportDecl(specifiers: [String], source: String?)
 }
 
-struct AssignmentExpression {
-    var left: Expression
-    var operator_: OperatorType
-    var right: Expression
+public enum LexicalKind {
+    case `let`
+    case `const`
 }
 
-struct CallExpression {
-    var callee: Expression
-    var arguments: [Expression]
-}
-
-struct MemberExpression {
-    var object: Expression
-    var property: String
-}
-
-struct ArrayLiteral {
-    var elements: [Expression]
-}
-
-struct ObjectLiteral {
-    var properties: [String: Expression]
-}
-
-struct ArrowFunction {
-    var params: [String]
-    var body: Expression
-}
-
-struct Parenthesized {
-    var expression: Expression
-}
-
-struct DeclarationStatement {
-    var declaration: Declaration
-}
-
-struct ExpressionStatement{
-    var expression: Expression
-}
-
-struct BlockStatement {
-    var statements: [Statement]
-}
-
-struct IfStatement {
-    var test: Expression
-    var consequent: Statement
-    var alternate: Statement?
-}
-
-struct WhileStatement {
-    var test: Expression
-    var body: Statement
-}
-
-struct DoWhileStatement {
-    var body: Statement
-    var test: Expression
-}
-
-struct ForStatement {
-    var initDecl: Declaration?
-    var initExpr: Expression?
-    var test: Expression?
-    var update: Expression?
-    var body: Statement
-}
-struct ForInStatement {
-    var left: Declaration?
-    var leftExpr: Expression?
-    var right: Expression
-    var body: Statement
-}
-
-struct ForOfStatement {
-    var left: Declaration?
-    var leftExpr: Expression?
-    var right: Expression
-    var body: Statement
-}
-
-struct ReturnStatement {
-    var argument: Expression?
-}
-
-struct BreakStatement {
-    var label: String?
-}
-
-struct ContinueStatement {
-    var label: String?
-}
-
-struct ThrowStatement {
-    var argument: Expression
-}
-
-struct TryStatement {
-    var block: BlockStatement
-    var catchDeclaration: VariableDeclaration
-    var handler: BlockStatement?
-    var finalizer: BlockStatement?
-}
-
-struct SwitchStatement {
-    var discriminant: Expression
-    var cases: [CaseStatement]
-}
-
-struct CaseStatement {
-    var test: Expression?
-    var consequent: [Statement]
-}
-
-struct LabelledStatement {
-    var label: String
-    var body: Statement
-}
-
-struct FunctionDeclaration {
-    var name: String
-    var params: [String]
-    var body: BlockStatement
-    var isAsync: Bool
-    var isGenerator: Bool
-}
-
-struct ClassDeclaration {
-    var name: String
-    var superClass: String?
-    var body: [Declaration]
-}
-
-struct LexicalDeclaration {
-    enum Kind {
-        case `let`
-        case `const`
-    }
-    var kind: Kind
-    var declarations: [String]
-}
-
-struct VariableDeclaration {
-    var declarations: [String]
-}
-
-struct ImportDeclaration {
-    var module: String
-    var specifiers: [String]
-}
-
-struct ExportDeclaration {
-    var specifiers: [String]
-    var source: String?
-}
-
-
+// MARK: - Debug printing
 
 extension ASTNode: CustomStringConvertible {
     public var description: String {
         switch self {
-            case .expression(let expr):
-                return "Expression: \(expr)"
-            case .statement(let stmt):
-                return "Statement: \(stmt)"
-            case .declaration(let decl):
-                return "Declaration: \(decl)"
-            case .program(let prog):
-                return "Program: \(prog)"
+        case .expression(let expr):
+            return "Expression: \(expr)"
+        case .statement(let stmt):
+            return "Statement: \(stmt)"
+        case .declaration(let decl):
+            return "Declaration: \(decl)"
+        case .program(let prog):
+            return "Program: \(prog)"
+        }
+    }
+}
+
+extension Program: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .program(let body):
+            return "Program(body: \(body))"
         }
     }
 }
@@ -255,52 +154,127 @@ extension ASTNode: CustomStringConvertible {
 extension Expression: CustomStringConvertible {
     public var description: String {
         switch self {
-            case .literal(let lit):
-                return "Literal Expression: \(lit)"
-            case .identifier(let name):
-                return "Identifier Expression: \(name)"
-            case .binaryExpression(let binExpr):
-                return "Binary Expression: \(binExpr)"
-            case .unaryExpression(let unExpr):
-                return "Unary Expression: \(unExpr)"
-            case .assignmentExpression(let assignExpr):
-                return "Assignment Expression: \(assignExpr)" 
-            case .callExpression(let callExpr):
-                return "Call Expression: \(callExpr)"
-            case .memberExpression(let memberExpr):
-                return "Member Expression: \(memberExpr)"
-            case .arrayLiteral(let arrayLit):
-                return "Array Literal: \(arrayLit)"
-            case .objectLiteral(let objLit):
-                return "Object Literal: \(objLit)"
-            case .arrowFunction(let arrowFunc):
-                return "Arrow Function: \(arrowFunc)"
-            case .parenthesized(let expr):  
-                return "Parenthesized Expression: \(expr)"
+        case .literal(let lit):
+            return "Literal(\(lit))"
+        case .identifier(let name):
+            return "Identifier(\(name))"
+        case .binary(let left, let op, let right):
+            return "Binary(left: \(left), op: \(op), right: \(right))"
+        case .unary(let op, let arg, let isPrefix):
+            return "Unary(op: \(op), arg: \(arg), isPrefix: \(isPrefix))"
+        case .assignment(let left, let op, let right):
+            return "Assignment(left: \(left), op: \(op), right: \(right))"
+        case .call(let callee, let args):
+            return "Call(callee: \(callee), args: \(args))"
+        case .member(let object, let property):
+            return "Member(object: \(object), property: \(property))"
+        case .arrayLiteral(let elements):
+            return "ArrayLiteral(\(elements))"
+        case .objectLiteral(let properties):
+            return "ObjectLiteral(\(properties))"
+        case .arrowFunction(let params, let body):
+            return "ArrowFunction(params: \(params), body: \(body))"
+        case .parenthesized(let expr):
+            return "Parenthesized(\(expr))"
+        }
+    }
+}
+
+extension Statement: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .block(let statements):
+            return "Block(\(statements))"
+        case .declarationStatement(let decl):
+            return "DeclarationStatement(\(decl))"
+        case .expressionStatement(let expr):
+            return "ExpressionStatement(\(expr))"
+        case .ifStatement(let test, let cons, let alt):
+            return "If(test: \(test), consequent: \(cons), alternate: \(String(describing: alt)))"
+        case .whileStatement(let test, let body):
+            return "While(test: \(test), body: \(body))"
+        case .doWhileStatement(let body, let test):
+            return "DoWhile(body: \(body), test: \(test))"
+        case .forStatement(let initDecl, let initExpr, let test, let update, let body):
+            return "For(initDecl: \(String(describing: initDecl)), initExpr: \(String(describing: initExpr)), test: \(String(describing: test)), update: \(String(describing: update)), body: \(body))"
+        case .forInStatement(let left, let leftExpr, let right, let body):
+            return "ForIn(left: \(String(describing: left)), leftExpr: \(String(describing: leftExpr)), right: \(right), body: \(body))"
+        case .forOfStatement(let left, let leftExpr, let right, let body):
+            return "ForOf(left: \(String(describing: left)), leftExpr: \(String(describing: leftExpr)), right: \(right), body: \(body))"
+        case .returnStatement(let arg):
+            return "Return(\(String(describing: arg)))"
+        case .breakStatement(let label):
+            return "Break(\(String(describing: label)))"
+        case .continueStatement(let label):
+            return "Continue(\(String(describing: label)))"
+        case .throwStatement(let arg):
+            return "Throw(\(arg))"
+        case .tryStatement(let block, let catchDecls, let handler, let finalizer):
+            return "Try(block: \(block), catch: \(catchDecls), handler: \(String(describing: handler)), finalizer: \(String(describing: finalizer)))"
+        case .switchStatement(let discr, let cases):
+            return "Switch(discriminant: \(discr), cases: \(cases))"
+        case .labelledStatement(let label, let body):
+            return "Labelled(label: \(label), body: \(body))"
+        case .empty:
+            return "Empty"
+        }
+    }
+}
+
+extension CaseStatement: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .case(let test, let consequent):
+            return "Case(test: \(String(describing: test)), consequent: \(consequent))"
+        }
+    }
+}
+
+extension Declaration: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .function(let name, let params, let body, let isAsync, let isGenerator):
+            return "Function(name: \(name), params: \(params), body: \(body), async: \(isAsync), generator: \(isGenerator))"
+        case .class(let name, let superClass, let body):
+            return "Class(name: \(name), super: \(String(describing: superClass)), body: \(body))"
+        case .lexical(let kind, let decls, let assignments):
+            return "Lexical(kind: \(kind), decls: \(decls), assignments: \(String(describing: assignments)))"
+        case .variable(let decls):
+            return "Var(decls: \(decls))"
+        case .importDecl(let module, let specifiers):
+            return "Import(module: \(module), specifiers: \(specifiers))"
+        case .exportDecl(let specifiers, let source):
+            return "Export(specifiers: \(specifiers), source: \(String(describing: source)))"
+        }
+    }
+}
+
+extension LexicalKind: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .let:
+            return "let"
+        case .const:
+            return "const"
         }
     }
 }
 
 extension Literal: CustomStringConvertible {
     public var description: String {
-        switch type {
-            case .int(let value):
-                return "Int Literal: \(value)"
-            case .float(let value):
-                return "Float Literal: \(value)"
-            case .string(let value):
-                return "String Literal: \"\(value)\""
-            case .bool(let value):
-                return "Bool Literal: \(value)"
-            case .null:
-                return "Null Literal"
-            case .undefined:
-                return "Undefined Literal"
+        switch self {
+        case .int(let value):
+            return "Int(\(value))"
+        case .float(let value):
+            return "Float(\(value))"
+        case .string(let value):
+            return "String(\"\(value)\")"
+        case .bool(let value):
+            return "Bool(\(value))"
+        case .null:
+            return "Null"
+        case .undefined:
+            return "Undefined"
         }
     }
 }
-
-
-
-
-
