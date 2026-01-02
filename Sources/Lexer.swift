@@ -112,9 +112,9 @@ public class Lexer {
         self.init(
             input: input,
             keywords: [
-                "if", "else", "while", "for", "return",
-                "func", "var", "let", "const",
-                "class", "struct", "enum", "import"
+                "if", "else", "while", "for", "return", "do", "throw", "try",
+                "function", "var", "let", "const", "of", "in", "switch", "export",
+                "class", "enum", "import", "break", "continue", "async"
             ],
             operators: [
                 "==", "!=", "<=", ">=", "&&", "||",

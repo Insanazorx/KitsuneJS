@@ -1,28 +1,44 @@
 public enum TokenType : Equatable {
     case identifier(String)
     case number(Int)
+    case float(Double)
     case string(String)
     case boolean(Bool)
-    
-    case `if`, `else`, `while`, `for`, `return`, `do` , `throw`, `try`
-    case `function`, `var`, `let`, `const`, `of`, `in`, `switch`, `export`
-    case `class`, `struct`, `enum`, `import`, `break`, `continue`, `async`
+    case null
+    case undefined
 
-    case equal, notEqual, lessThan, greaterThan
-    case lessThanOrEqual, greaterThanOrEqual
-    case logicalAnd, logicalOr
-    case plus, minus, multiply, divide, assign
-    case arrow, increment, decrement
-    case plusAssign, minusAssign, multiplyAssign, divideAssign
-    case dot, ampersand, pipe
-    case caret, percent, tilde
-    case strictEqual, strictNotEqual
+    case `async`, `await`, `break`, `case`, `catch`, `class`
+    case `const`, `continue`, `default`, `do`, `else`, `enum`
+    case `eval`, `export`, `extends`, `false`, `finally`, `for`
+    case `function`, `if`, `import`, `in`, `let`
+    case `of`, `return`, `super`, `switch`, `this`, `throw`
+    case `true`, `try`, `var`, `while`
 
+    case binaryOp(BinaryOperation)
+    case unaryOp(UnaryOperation)
+    case arrow, dot, ampersand, pipe
     case leftParen, rightParen
     case leftBrace, rightBrace
     case leftBracket, rightBracket
     case semicolon, colon, comma
 }
+
+public enum BinaryOperation{
+    case equal, notEqual, lessThan, greaterThan
+    case lessThanOrEqual, greaterThanOrEqual
+    case logicalAnd, logicalOr
+    case plus, minus, multiply, divide, assign
+    case plusAssign, minusAssign, multiplyAssign, divideAssign
+    case caret, percent
+    case strictEqual, strictNotEqual
+}
+
+public enum UnaryOperation{
+    case exclamationMark, tilde
+    case increment, decrement
+    case typeof, new, delete, instanceof
+    case void
+}  
 
 public struct Token: CustomStringConvertible, Equatable {
     public var description: String { "Token(\(lexType), \"\(lexeme)\")" }
@@ -46,57 +62,75 @@ public struct Token: CustomStringConvertible, Equatable {
             case "true": return .boolean(true)
             case "false": return .boolean(false)
             //keywords
-            case "if": return .if
-            case "else": return .else
-            case "while": return .while
-            case "do": return .do
-            case "for": return .for
-            case "return": return .return
-            case "function": return .function   
-            case "var": return .var
-            case "let": return .let
-            case "const": return .const
-            case "class": return .class
-            case "struct": return .struct
-            case "enum": return .enum
-            case "import": return .import
-            case "break": return .break
-            case "continue": return .continue
             case "async": return .async
-            case "switch": return .switch
-            case "throw": return .throw
-            case "try": return .try
+            case "await": return .await
+            case "break": return .break
+            case "case": return .case
+            case "catch": return .catch
+            case "class": return .class
+            case "const": return .const
+            case "continue": return .continue
+            case "default": return .default
+            case "delete": return .unaryOp(.delete)
+            case "do": return .do
+            case "else": return .else
+            case "enum": return .enum
+            case "eval": return .eval
             case "export": return .export
+            case "extends": return .extends
+            case "finally": return .finally
+            case "for": return .for
+            case "function": return .function
+            case "if": return .if
+            case "import": return .import
+            case "in": return .in
+            case "instanceof": return .unaryOp(.instanceof)
+            case "let": return .let
+            case "new": return .unaryOp(.new)
+            case "of": return .of
+            case "return": return .return
+            case "super": return .super
+            case "switch": return .switch
+            case "this": return .this
+            case "throw": return .throw
+            case "typeof": return .unaryOp(.typeof)
+            case "null": return .null
+            case "undefined": return .undefined
+            case "try": return .try
+            case "var": return .var
+            case "void": return .unaryOp(.void)
+            case "while": return .while
+            
             
             // operators        
-            case "==": return .equal
-            case "!=": return .notEqual
-            case "<": return .lessThan
-            case ">": return .greaterThan
-            case "<=": return .lessThanOrEqual
-            case ">=": return .greaterThanOrEqual
-            case "&&": return .logicalAnd
-            case "||": return .logicalOr
-            case "+": return .plus
-            case "-": return .minus
-            case "*": return .multiply
-            case "/": return .divide
-            case "=": return .assign
+            case "==": return .binaryOp(.equal)
+            case "!=": return .binaryOp(.notEqual)
+            case "<": return .binaryOp(.lessThan)
+            case ">": return .binaryOp(.greaterThan)
+            case "<=": return .binaryOp(.lessThanOrEqual)
+            case ">=": return .binaryOp(.greaterThanOrEqual)
+            case "&&": return .binaryOp(.logicalAnd)
+            case "||": return .binaryOp(.logicalOr)
+            case "+": return .binaryOp(.plus)
+            case "-": return .binaryOp(.minus)
+            case "*": return .binaryOp(.multiply)
+            case "/": return .binaryOp(.divide)
+            case "=": return .binaryOp(.assign)
             case "=>": return .arrow
-            case "++": return .increment
-            case "--": return .decrement
-            case "+=": return .plusAssign
-            case "-=": return .minusAssign
-            case "*=": return .multiplyAssign
-            case "/=": return .divideAssign
+            case "++": return .unaryOp(.increment)
+            case "--": return .unaryOp(.decrement)
+            case "+=": return .binaryOp(.plusAssign)
+            case "-=": return .binaryOp(.minusAssign)
+            case "*=": return .binaryOp(.multiplyAssign)
+            case "/=": return .binaryOp(.divideAssign)
             case ".": return .dot
             case "&": return .ampersand
             case "|": return .pipe
-            case "^": return .caret
-            case "%": return .percent
-            case "~": return .tilde
-            case "===": return .strictEqual
-            case "!==": return .strictNotEqual
+            case "^": return .binaryOp(.caret)
+            case "%": return .binaryOp(.percent)
+            case "~": return .unaryOp(.tilde)
+            case "===": return .binaryOp(.strictEqual)
+            case "!==": return .binaryOp(.strictNotEqual)
             // punctuation
             case "(": return .leftParen
             case ")": return .rightParen

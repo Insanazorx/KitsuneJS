@@ -17,6 +17,7 @@ public indirect enum Program {
 public indirect enum Expression {
     case literal(Literal)
     case identifier(String)
+    case this
 
     case binary(left: Expression, operator_: TokenType, right: Expression)
     case unary(operator_: TokenType, argument: Expression, isPrefix: Bool)
@@ -28,8 +29,22 @@ public indirect enum Expression {
 
     case arrayLiteral(elements: [Expression])
     case objectLiteral(properties: [String: Expression])
+    case functionExpression(
+        name: Expression?,
+        params: [Expression?],
+        body: Statement,
+        isAsync: Bool,
+        isGenerator: Bool
+    )
 
-    case arrowFunction(params: [String], body: Expression)
+    case classExpression(
+        name: Expression?,
+        superClass: Expression?,
+        body: [Declaration]
+    )
+
+
+    case arrowFunction(params: [Expression?], body: Expression)
 
     case parenthesized(Expression)
 }
@@ -77,7 +92,7 @@ public indirect enum Statement {
 
     case tryStatement(
         block: Statement,
-        catchDeclarations: [String],
+        catchDeclarations: [Declaration?],
         handler: Statement?,
         finalizer: Statement?
     )
@@ -97,27 +112,27 @@ public indirect enum CaseStatement {
 // Declarations
 public indirect enum Declaration {
     case function(
-        name: String,
-        params: Statement,
+        name: Expression?,
+        params: [Expression?],
         body: Statement, // typically .block
         isAsync: Bool,
         isGenerator: Bool
     )
 
     case `class`(
-        name: String,
-        superClass: String?,
+        name: Expression?,
+        superClass: Expression?,
         body: [Declaration]
     )
 
     // let / const
-    case lexical(kind: LexicalKind, declarations: [String], assignments: [Expression]?)
+    case lexical(kind: LexicalKind, declarations: [Expression?], assignments: [Expression]?)
 
     // var
-    case variable(declarations: [String])
+    case variable(declarations: [Expression?])
 
-    case importDecl(module: String, specifiers: [String])
-    case exportDecl(specifiers: [String], source: String?)
+    case importDecl(module: Expression, specifiers: [Expression])
+    case exportDecl(specifiers: [Expression], source: Expression?)
 }
 
 public enum LexicalKind {
@@ -176,6 +191,12 @@ extension Expression: CustomStringConvertible {
             return "ArrowFunction(params: \(params), body: \(body))"
         case .parenthesized(let expr):
             return "Parenthesized(\(expr))"
+        case .this:
+            return "This"
+        case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
+            return "FunctionExpression(name: \(String(describing: name)), params: \(params), body: \(body), async: \(isAsync), generator: \(isGenerator))"
+        case .classExpression(let name, let superClass, let body):
+            return "ClassExpression(name: \(String(describing: name)), super: \(String(describing: superClass)), body: \(body))"
         }
     }
 }
