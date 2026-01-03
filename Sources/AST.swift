@@ -25,7 +25,11 @@ public indirect enum Expression {
     case assignment(left: Expression, operator_: TokenType, right: Expression)
 
     case call(callee: Expression, arguments: [Expression])
-    case member(object: Expression, property: String)
+    case member(object: Expression, property: Expression)
+    case sequence (expressions: [Expression])
+    case new(callee: Expression, arguments: [Expression?])
+    case yield(argument: Expression?)
+    case await(argument: Expression)
 
     case arrayLiteral(elements: [Expression])
     case objectLiteral(properties: [String: Expression])
@@ -46,7 +50,7 @@ public indirect enum Expression {
 
     case arrowFunction(params: [Expression?], body: Expression)
 
-    case parenthesized(Expression)
+    case parenthesized(Expression?)
 }
 
 // Literals
@@ -89,7 +93,6 @@ public indirect enum Statement {
 
     case throwStatement(argument: Expression)
 
-
     case tryStatement(
         block: Statement,
         catchDeclarations: [Declaration?],
@@ -129,7 +132,7 @@ public indirect enum Declaration {
     case lexical(kind: LexicalKind, declarations: [Expression?], assignments: [Expression]?)
 
     // var
-    case variable(declarations: [Expression?])
+    case variable(declarations: [Expression?], assignments: [Expression]?)
 
     case importDecl(module: Expression, specifiers: [Expression])
     case exportDecl(specifiers: [Expression], source: Expression?)
@@ -140,132 +143,355 @@ public enum LexicalKind {
     case `const`
 }
 
-// MARK: - Debug printing
+// MARK: - Debug printing (Tree View)
 
+private struct TreeBox {
+    let label: String
+    var children: [TreeBox] = []
+}
+
+private func renderTree(_ node: TreeBox) -> String {
+    var lines: [String] = [node.label]
+
+    func walk(_ n: TreeBox, _ prefix: String, _ isLast: Bool) {
+        let connector = isLast ? "└─ " : "├─ "
+        lines.append(prefix + connector + n.label)
+
+        let nextPrefix = prefix + (isLast ? "   " : "│  ")
+        for (i, child) in n.children.enumerated() {
+            walk(child, nextPrefix, i == n.children.count - 1)
+        }
+    }
+
+    for (i, child) in node.children.enumerated() {
+        walk(child, "", i == node.children.count - 1)
+    }
+
+    return lines.joined(separator: "\n")
+}
+
+private func box(_ label: String, _ children: [TreeBox] = []) -> TreeBox {
+    TreeBox(label: label, children: children)
+}
+
+private func boxOpt(_ name: String, _ value: TreeBox?) -> TreeBox {
+    box(name, [value ?? box("<nil>")])
+}
+
+private func boxList(_ name: String, _ values: [TreeBox]) -> TreeBox {
+    box(name, values.isEmpty ? [box("<empty>")] : values)
+}
+
+private func boxOptList(_ name: String, _ values: [TreeBox?]) -> TreeBox {
+    let rendered = values.map { $0 ?? box("<nil>") }
+    return boxList(name, rendered)
+}
+
+// Top-level wrapper
 extension ASTNode: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .expression(let expr):
-            return "Expression: \(expr)"
+            return box("ASTNode.expression", [expr.toTreeBox()])
         case .statement(let stmt):
-            return "Statement: \(stmt)"
+            return box("ASTNode.statement", [stmt.toTreeBox()])
         case .declaration(let decl):
-            return "Declaration: \(decl)"
+            return box("ASTNode.declaration", [decl.toTreeBox()])
         case .program(let prog):
-            return "Program: \(prog)"
+            return box("ASTNode.program", [prog.toTreeBox()])
         }
     }
 }
 
 extension Program: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .program(let body):
-            return "Program(body: \(body))"
+            return box("Program", [boxList("body", body.map { $0.toTreeBox() })])
         }
     }
 }
 
 extension Expression: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .literal(let lit):
-            return "Literal(\(lit))"
+            return box("Expression.literal", [lit.toTreeBox()])
         case .identifier(let name):
-            return "Identifier(\(name))"
-        case .binary(let left, let op, let right):
-            return "Binary(left: \(left), op: \(op), right: \(right))"
-        case .unary(let op, let arg, let isPrefix):
-            return "Unary(op: \(op), arg: \(arg), isPrefix: \(isPrefix))"
-        case .assignment(let left, let op, let right):
-            return "Assignment(left: \(left), op: \(op), right: \(right))"
-        case .call(let callee, let args):
-            return "Call(callee: \(callee), args: \(args))"
-        case .member(let object, let property):
-            return "Member(object: \(object), property: \(property))"
-        case .arrayLiteral(let elements):
-            return "ArrayLiteral(\(elements))"
-        case .objectLiteral(let properties):
-            return "ObjectLiteral(\(properties))"
-        case .arrowFunction(let params, let body):
-            return "ArrowFunction(params: \(params), body: \(body))"
-        case .parenthesized(let expr):
-            return "Parenthesized(\(expr))"
+            return box("Expression.identifier(\(name))")
         case .this:
-            return "This"
+            return box("Expression.this")
+
+        case .binary(let left, let op, let right):
+            return box("Expression.binary", [
+                box("operator: \(op)"),
+                box("left", [left.toTreeBox()]),
+                box("right", [right.toTreeBox()])
+            ])
+
+        case .unary(let op, let arg, let isPrefix):
+            return box("Expression.unary", [
+                box("operator: \(op)"),
+                box("isPrefix: \(isPrefix)"),
+                box("argument", [arg.toTreeBox()])
+            ])
+
+        case .assignment(let left, let op, let right):
+            return box("Expression.assignment", [
+                box("operator: \(op)"),
+                box("left", [left.toTreeBox()]),
+                box("right", [right.toTreeBox()])
+            ])
+
+        case .call(let callee, let arguments):
+            return box("Expression.call", [
+                box("callee", [callee.toTreeBox()]),
+                boxList("arguments", arguments.map { $0.toTreeBox() })
+            ])
+
+        case .member(let object, let property):
+            return box("Expression.member", [
+                box("object", [object.toTreeBox()]),
+                box("property", [property.toTreeBox()])
+            ])
+
+        case .sequence(let expressions):
+            return box("Expression.sequence", [boxList("expressions", expressions.map { $0.toTreeBox() })])
+
+        case .new(let callee, let arguments):
+            let args = arguments.map { $0?.toTreeBox() }
+            return box("Expression.new", [
+                box("callee", [callee.toTreeBox()]),
+                boxOptList("arguments", args)
+            ])
+
+        case .yield(let argument):
+            return box("Expression.yield", [boxOpt("argument", argument?.toTreeBox())])
+
+        case .await(let argument):
+            return box("Expression.await", [box("argument", [argument.toTreeBox()])])
+
+        case .arrayLiteral(let elements):
+            return box("Expression.arrayLiteral", [boxList("elements", elements.map { $0.toTreeBox() })])
+
+        case .objectLiteral(let properties):
+            let props = properties
+                .sorted(by: { $0.key < $1.key })
+                .map { key, value in box("\(key)", [value.toTreeBox()]) }
+            return box("Expression.objectLiteral", [boxList("properties", props)])
+
         case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
-            return "FunctionExpression(name: \(String(describing: name)), params: \(params), body: \(body), async: \(isAsync), generator: \(isGenerator))"
+            return box("Expression.functionExpression", [
+                boxOpt("name", name?.toTreeBox()),
+                boxOptList("params", params.map { $0?.toTreeBox() }),
+                box("async: \(isAsync)"),
+                box("generator: \(isGenerator)"),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .classExpression(let name, let superClass, let body):
-            return "ClassExpression(name: \(String(describing: name)), super: \(String(describing: superClass)), body: \(body))"
+            return box("Expression.classExpression", [
+                boxOpt("name", name?.toTreeBox()),
+                boxOpt("superClass", superClass?.toTreeBox()),
+                boxList("body", body.map { $0.toTreeBox() })
+            ])
+
+        case .arrowFunction(let params, let body):
+            return box("Expression.arrowFunction", [
+                boxOptList("params", params.map { $0?.toTreeBox() }),
+                box("body", [body.toTreeBox()])
+            ])
+
+        case .parenthesized(let expr):
+            if let e = expr {
+                return box("Expression.parenthesized", [e.toTreeBox()])
+            }
+            return box("Expression.parenthesized", [box("<nil>")])
+        }
+    }
+}
+
+extension Literal: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .int(let v):
+            return box("Literal.int(\(v))")
+        case .float(let v):
+            return box("Literal.float(\(v))")
+        case .string(let v):
+            return box("Literal.string(\"\(v)\")")
+        case .bool(let v):
+            return box("Literal.bool(\(v))")
+        case .null:
+            return box("Literal.null")
+        case .undefined:
+            return box("Literal.undefined")
         }
     }
 }
 
 extension Statement: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .block(let statements):
-            return "Block(\(statements))"
+            return box("Statement.block", [boxOptList("statements", statements.map { $0?.toTreeBox() })])
+
         case .declarationStatement(let decl):
-            return "DeclarationStatement(\(decl))"
+            return box("Statement.declarationStatement", [decl.toTreeBox()])
+
         case .expressionStatement(let expr):
-            return "ExpressionStatement(\(expr))"
-        case .ifStatement(let test, let cons, let alt):
-            return "If(test: \(test), consequent: \(cons), alternate: \(String(describing: alt)))"
+            return box("Statement.expressionStatement", [expr.toTreeBox()])
+
+        case .ifStatement(let test, let consequent, let alternate):
+            return box("Statement.if", [
+                box("test", [test.toTreeBox()]),
+                box("consequent", [consequent.toTreeBox()]),
+                boxOpt("alternate", alternate?.toTreeBox())
+            ])
+
         case .whileStatement(let test, let body):
-            return "While(test: \(test), body: \(body))"
+            return box("Statement.while", [
+                box("test", [test.toTreeBox()]),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .doWhileStatement(let body, let test):
-            return "DoWhile(body: \(body), test: \(test))"
+            return box("Statement.doWhile", [
+                box("body", [body.toTreeBox()]),
+                box("test", [test.toTreeBox()])
+            ])
+
         case .forStatement(let initDecl, let initExpr, let test, let update, let body):
-            return "For(initDecl: \(String(describing: initDecl)), initExpr: \(String(describing: initExpr)), test: \(String(describing: test)), update: \(String(describing: update)), body: \(body))"
+            return box("Statement.for", [
+                boxOpt("initDecl", initDecl?.toTreeBox()),
+                boxOpt("initExpr", initExpr?.toTreeBox()),
+                boxOpt("test", test?.toTreeBox()),
+                boxOpt("update", update?.toTreeBox()),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .forInStatement(let left, let leftExpr, let right, let body):
-            return "ForIn(left: \(String(describing: left)), leftExpr: \(String(describing: leftExpr)), right: \(right), body: \(body))"
+            return box("Statement.forIn", [
+                boxOpt("leftDecl", left?.toTreeBox()),
+                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                box("right", [right.toTreeBox()]),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .forOfStatement(let left, let leftExpr, let right, let body):
-            return "ForOf(left: \(String(describing: left)), leftExpr: \(String(describing: leftExpr)), right: \(right), body: \(body))"
-        case .returnStatement(let arg):
-            return "Return(\(String(describing: arg)))"
+            return box("Statement.forOf", [
+                boxOpt("leftDecl", left?.toTreeBox()),
+                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                box("right", [right.toTreeBox()]),
+                box("body", [body.toTreeBox()])
+            ])
+
+        case .returnStatement(let argument):
+            return box("Statement.return", [boxOpt("argument", argument?.toTreeBox())])
+
         case .breakStatement(let label):
-            return "Break(\(String(describing: label)))"
+            return box("Statement.break", [box("label: \(label ?? "<nil>")")])
+
         case .continueStatement(let label):
-            return "Continue(\(String(describing: label)))"
-        case .throwStatement(let arg):
-            return "Throw(\(arg))"
-        case .tryStatement(let block, let catchDecls, let handler, let finalizer):
-            return "Try(block: \(block), catch: \(catchDecls), handler: \(String(describing: handler)), finalizer: \(String(describing: finalizer)))"
-        case .switchStatement(let discr, let cases):
-            return "Switch(discriminant: \(discr), cases: \(cases))"
+            return box("Statement.continue", [box("label: \(label ?? "<nil>")")])
+
+        case .throwStatement(let argument):
+            return box("Statement.throw", [box("argument", [argument.toTreeBox()])])
+
+        case .tryStatement(let blockStmt, let catchDecls, let handler, let finalizer):
+            return box("Statement.try", [
+                box("block", [blockStmt.toTreeBox()]),
+                boxOptList("catchDeclarations", catchDecls.map { $0?.toTreeBox() }),
+                boxOpt("handler", handler?.toTreeBox()),
+                boxOpt("finalizer", finalizer?.toTreeBox())
+            ])
+
+        case .switchStatement(let discriminant, let cases):
+            return box("Statement.switch", [
+                box("discriminant", [discriminant.toTreeBox()]),
+                boxList("cases", cases.map { $0.toTreeBox() })
+            ])
+
         case .labelledStatement(let label, let body):
-            return "Labelled(label: \(label), body: \(body))"
+            return box("Statement.labelled", [
+                box("label: \(label)"),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .empty:
-            return "Empty"
+            return box("Statement.empty")
         }
     }
 }
 
 extension CaseStatement: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .case(let test, let consequent):
-            return "Case(test: \(String(describing: test)), consequent: \(consequent))"
+            return box("Case", [
+                boxOpt("test", test?.toTreeBox()),
+                boxList("consequent", consequent.map { $0.toTreeBox() })
+            ])
         }
     }
 }
 
 extension Declaration: CustomStringConvertible {
-    public var description: String {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
         switch self {
         case .function(let name, let params, let body, let isAsync, let isGenerator):
-            return "Function(name: \(name), params: \(params), body: \(body), async: \(isAsync), generator: \(isGenerator))"
+            return box("Declaration.function", [
+                boxOpt("name", name?.toTreeBox()),
+                boxOptList("params", params.map { $0?.toTreeBox() }),
+                box("async: \(isAsync)"),
+                box("generator: \(isGenerator)"),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .class(let name, let superClass, let body):
-            return "Class(name: \(name), super: \(String(describing: superClass)), body: \(body))"
-        case .lexical(let kind, let decls, let assignments):
-            return "Lexical(kind: \(kind), decls: \(decls), assignments: \(String(describing: assignments)))"
-        case .variable(let decls):
-            return "Var(decls: \(decls))"
+            return box("Declaration.class", [
+                boxOpt("name", name?.toTreeBox()),
+                boxOpt("superClass", superClass?.toTreeBox()),
+                boxList("body", body.map { $0.toTreeBox() })
+            ])
+
+        case .lexical(let kind, let declarations, let assignments):
+            return box("Declaration.lexical(\(kind))", [
+                boxOptList("declarations", declarations.map { $0?.toTreeBox() }),
+                boxList("assignments", (assignments ?? []).map { $0.toTreeBox() })
+            ])
+
+        case .variable(let declarations, let assignments):
+            return box("Declaration.variable", [
+                boxOptList("declarations", declarations.map { $0?.toTreeBox() }),
+                boxList("assignments", (assignments ?? []).map { $0.toTreeBox() })
+            ])
+
         case .importDecl(let module, let specifiers):
-            return "Import(module: \(module), specifiers: \(specifiers))"
+            return box("Declaration.import", [
+                box("module", [module.toTreeBox()]),
+                boxList("specifiers", specifiers.map { $0.toTreeBox() })
+            ])
+
         case .exportDecl(let specifiers, let source):
-            return "Export(specifiers: \(specifiers), source: \(String(describing: source)))"
+            return box("Declaration.export", [
+                boxList("specifiers", specifiers.map { $0.toTreeBox() }),
+                boxOpt("source", source?.toTreeBox())
+            ])
         }
     }
 }
@@ -277,25 +503,6 @@ extension LexicalKind: CustomStringConvertible {
             return "let"
         case .const:
             return "const"
-        }
-    }
-}
-
-extension Literal: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .int(let value):
-            return "Int(\(value))"
-        case .float(let value):
-            return "Float(\(value))"
-        case .string(let value):
-            return "String(\"\(value)\")"
-        case .bool(let value):
-            return "Bool(\(value))"
-        case .null:
-            return "Null"
-        case .undefined:
-            return "Undefined"
         }
     }
 }

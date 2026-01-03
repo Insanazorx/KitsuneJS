@@ -11,12 +11,13 @@ public enum TokenType : Equatable {
     case `const`, `continue`, `default`, `do`, `else`, `enum`
     case `eval`, `export`, `extends`, `false`, `finally`, `for`
     case `function`, `if`, `import`, `in`, `let`
-    case `of`, `return`, `super`, `switch`, `this`, `throw`
-    case `true`, `try`, `var`, `while`
+    case `new`, `of`, `return`, `super`, `switch`, `this`, `throw`
+    case `true`, `try`, `var`, `while`, `yield`
 
     case binaryOp(BinaryOperation)
     case unaryOp(UnaryOperation)
-    case arrow, dot, ampersand, pipe
+    case updateOp(UpdateOperation)
+    case arrow, dot
     case leftParen, rightParen
     case leftBrace, rightBrace
     case leftBracket, rightBracket
@@ -26,19 +27,22 @@ public enum TokenType : Equatable {
 public enum BinaryOperation{
     case equal, notEqual, lessThan, greaterThan
     case lessThanOrEqual, greaterThanOrEqual
-    case logicalAnd, logicalOr
+    case logicalAnd, logicalOr, instanceof
     case plus, minus, multiply, divide, assign
     case plusAssign, minusAssign, multiplyAssign, divideAssign
-    case caret, percent
+    case caret, percent, ampersand, pipe
     case strictEqual, strictNotEqual
 }
 
 public enum UnaryOperation{
     case exclamationMark, tilde
-    case increment, decrement
-    case typeof, new, delete, instanceof
+    case typeof, delete
     case void
 }  
+
+public enum UpdateOperation {
+    case increment, decrement
+}
 
 public struct Token: CustomStringConvertible, Equatable {
     public var description: String { "Token(\(lexType), \"\(lexeme)\")" }
@@ -84,9 +88,9 @@ public struct Token: CustomStringConvertible, Equatable {
             case "if": return .if
             case "import": return .import
             case "in": return .in
-            case "instanceof": return .unaryOp(.instanceof)
+            case "instanceof": return .binaryOp(.instanceof)
             case "let": return .let
-            case "new": return .unaryOp(.new)
+            case "new": return .new
             case "of": return .of
             case "return": return .return
             case "super": return .super
@@ -117,20 +121,21 @@ public struct Token: CustomStringConvertible, Equatable {
             case "/": return .binaryOp(.divide)
             case "=": return .binaryOp(.assign)
             case "=>": return .arrow
-            case "++": return .unaryOp(.increment)
-            case "--": return .unaryOp(.decrement)
+            case "++": return .updateOp(.increment)
+            case "--": return .updateOp(.decrement)
             case "+=": return .binaryOp(.plusAssign)
             case "-=": return .binaryOp(.minusAssign)
             case "*=": return .binaryOp(.multiplyAssign)
             case "/=": return .binaryOp(.divideAssign)
             case ".": return .dot
-            case "&": return .ampersand
-            case "|": return .pipe
+            case "&": return .binaryOp(.ampersand)
+            case "|": return .binaryOp(.pipe)
             case "^": return .binaryOp(.caret)
             case "%": return .binaryOp(.percent)
             case "~": return .unaryOp(.tilde)
             case "===": return .binaryOp(.strictEqual)
             case "!==": return .binaryOp(.strictNotEqual)
+            case "!": return .unaryOp(.exclamationMark)
             // punctuation
             case "(": return .leftParen
             case ")": return .rightParen

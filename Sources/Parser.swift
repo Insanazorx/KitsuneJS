@@ -45,38 +45,27 @@ protocol Parsers {
     func parseEmptyStatement() throws -> Statement?
     
     // Expressions
-    /*  
-        Parsing precedence climbing order:
 
-        PrimaryExpression
-                ↓
-        MemberExpression
-                ↓
-        CallExpression
-                ↓
-        UnaryExpression
-                ↓
-        BinaryExpression
-                ↓
-        AssignmentExpression
-    */
+    func parseNudExpression() throws -> Expression?
+    
+    func parseAssignmentExpression() throws -> Expression?  
 
-    func parseAssignmentExpression() throws -> Expression?  //implement
-
-    func parseBinaryExpression() throws -> Expression?      //implement
+    func parseBinaryExpression() throws -> Expression?      
     func parseUnaryExpression() throws -> Expression?
     
     func parseCallExpression() throws -> Expression?
     func parseMemberExpression() throws -> Expression?
     
-    func parsePrimaryExpression() throws -> Expression?     //implement
-    
+    func parseNewExpression() throws -> Expression?    
+    func parseYieldExpression() throws -> Expression?  
+    func parseAwaitExpression() throws -> Expression?  
+
     func parseFunctionExpression(isAsync: Bool) throws -> Expression?
     func classExpression() throws -> Expression?
     func parseArrayLiteral() throws -> Expression?
     func parseObjectLiteral() throws -> Expression?
-    func parseArrowFunction() throws -> Expression?
-    
+    func parseArrowFunction(isAsync: Bool, ParenthesizedExpr: Expression?, OneArg: Expression?) throws -> Expression?
+
     func parseParenthesizedExpression() throws -> Expression?
 
 }
@@ -84,11 +73,12 @@ protocol Parsers {
 
 protocol ParserCore {
     func parse() throws -> ASTNode 
-    func parseExpression() throws -> Expression?
+    func parseExpression(precedence currentbp: Int) throws -> Expression?
     func parseStatement(isAsync: Bool) throws -> Statement?
     func advance()-> Void
     func currentToken() -> Token?
     func peekToken(aheadBy n: Int) -> Token?
+    func consumeSemicolon() throws
 }
 
 public class Parser {
@@ -129,11 +119,11 @@ extension Parser {
             return (20, 21)
 
 // Unary operators: new, instanceof
-        case .unaryOp(.new), .unaryOp(.instanceof):
+        case .new, .binaryOp(.instanceof):
             return (19, 20)
             
         // Postfix update (can also be prefix in your nud/unary parser)
-        case .unaryOp(.increment), .unaryOp(.decrement):
+        case .updateOp(.increment), .updateOp(.decrement):
             return (18, 19)
 
         // Unary operators (typically handled in nud, but precedence is useful for Pratt plumbing)
@@ -163,11 +153,11 @@ extension Parser {
             return (11, 12)
 
         // Bitwise
-        case .ampersand:
+        case .binaryOp(let op) where op == .ampersand:
             return (10, 11)
         case .binaryOp (let caret) where caret == .caret:
             return (9, 10)
-        case .pipe:
+        case .binaryOp(let op) where op == .pipe:
             return (8, 9)
 
         // Logical
@@ -186,12 +176,23 @@ extension Parser {
             return (1, 2)
 
         default:
-            fatalError("No binding power for token type: \(operatorToken)")
+            return nil
         }
     }
 }
 
 extension Parser : ParserCore {
+
+    func consumeSemicolon() throws {
+        if currentToken()?.tokenType == .semicolon {
+        advance()
+            return
+        }
+        if currentToken() == nil || currentToken()?.tokenType == .rightBrace {
+            return // ASI
+        }
+        throw ParserError.unexpectedToken(currentTokenIndex)
+    }
    
     internal func advance() {
         currentTokenIndex += 1;
@@ -205,7 +206,7 @@ extension Parser : ParserCore {
     }
 
     func peekToken(aheadBy n: Int) -> Token? {
-        let peekIndex = currentTokenIndex + n
+        let peekIndex = currentTokenIndex + n - 1
         if peekIndex < tokens.count {
             return tokens[peekIndex]
         }
@@ -217,15 +218,12 @@ extension Parser : ParserCore {
 
         var stmts: [Statement] = [];
 
-        do {
             while let stmt = try parseStatement() {
                 stmts.append(stmt);
+                if currentToken() == nil {break} 
+                
             }        
-            
-        } catch {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
+                    
         let program = Program.program(body: stmts);
 
        return ASTNode.program(program);
@@ -250,12 +248,13 @@ extension Parser : ParserCore {
                 return try parseContinueStatement()
             case .class, .var, .let, .const, .import, .export: 
                 return try parseDeclarationStatement(isAsync: isAsync)
-            case .function:
-                if case .identifier(_) = peekToken(aheadBy: 1)?.tokenType ,
-                   case .identifier(_) = peekToken(aheadBy: 2)?.tokenType {
-                    return try parseExpressionStatement();   
-                } 
-                return try parseDeclarationStatement(isAsync: isAsync)
+            case .function: 
+                if case .identifier(_) = peekToken(aheadBy: 1)?.tokenType {
+                    return try parseDeclarationStatement(isAsync: isAsync)  
+                } else if case .identifier(_) = peekToken(aheadBy: 2)?.tokenType {
+                    return try parseDeclarationStatement(isAsync: isAsync)
+                }
+                return try parseExpressionStatement()
             case .throw:
                 return try parseThrowStatement()
             case .try:
@@ -274,21 +273,90 @@ extension Parser : ParserCore {
         return try parseExpressionStatement()
     }
 
-    func parseExpression() throws -> Expression? {
-        let nud_expr  = try parsePrimaryExpression();        
-        return nil
+
+    // Pratt parser
+    func parseExpression(precedence currentbp: Int) throws -> Expression? {
+        guard let lhs = try parseNudExpression() else {
+            throw ParserError.invalidSyntax(currentTokenIndex) 
+        }
+        while let opToken = currentToken()?.tokenType,
+              let bp = BindingPower(for: opToken),
+              bp.left >= currentbp {
+            advance() // consume operator
+            guard let rhs = try parseExpression(precedence: bp.right) else {
+                throw ParserError.invalidSyntax(currentTokenIndex)
+            }
+            switch opToken {
+                case .binaryOp:
+                    return Expression.binary(
+                        left: lhs,
+                        operator_: opToken,
+                        right: rhs
+                    )
+                case .updateOp(let unOp) where unOp == .increment || unOp == .decrement: 
+                    return Expression.unary(
+                        operator_: opToken,
+                        argument: lhs,
+                        isPrefix: false
+                    )
+                case .dot:
+                    return Expression.member(
+                        object: lhs,
+                        property: rhs
+                    )
+                case .leftParen:
+                    return Expression.call(
+                        callee: lhs,
+                        arguments: [rhs]
+                    )
+                
+                
+
+                default:
+                    fatalError("Unexpected operator token in parseExpression: \(opToken)")
+            }
+        }
+        return lhs;
     }
     
 }
 
 extension Parser : Parsers {
-    // Expressions
-    func parsePrimaryExpression() throws -> Expression? {
-        switch currentToken()?.tokenType {
+
+    func parseNudExpression() throws -> Expression? {
+        guard let tok = currentToken()?.tokenType else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        switch tok {
+            case .new:
+                return try parseNewExpression()
+            case .yield:
+                return try parseYieldExpression()
+            case .await:
+                return try parseAwaitExpression()
+
+            case .updateOp(.increment), .updateOp(.decrement):
+                return try parseUnaryExpression()
+
+            case .unaryOp:
+                return try parseUnaryExpression()
+
+            // binary ops as unary (prefix) operators 
+            case .binaryOp(let op) where op == .plus || op == .minus:
+                return try parseUnaryExpression()
+
+            // --- Primary / atomic starts ---
             case .this:
                 advance()
                 return Expression.this
-            case .identifier(let name):     
+            case .identifier(let name):
+                if case .arrow = peekToken(aheadBy: 1)?.tokenType {
+                    return try parseArrowFunction(
+                        isAsync: false,
+                        ParenthesizedExpr: nil,
+                        OneArg: Expression.identifier(name)
+                    )
+                }
                 advance()
                 return Expression.identifier(name)
             case .number(let value):
@@ -310,7 +378,11 @@ extension Parser : Parsers {
                 advance()
                 return Expression.literal(.undefined)
             case .leftParen:
-                return try parseParenthesizedExpression()
+                let expr = try parseParenthesizedExpression()
+                if currentToken()?.tokenType == .arrow {
+                    return try parseArrowFunction(isAsync: false, ParenthesizedExpr: expr, OneArg: nil)
+                }
+                return expr
             case .leftBracket:
                 return try parseArrayLiteral()
             case .leftBrace:
@@ -319,19 +391,66 @@ extension Parser : Parsers {
                 return try parseFunctionExpression(isAsync: false)
             case .class:
                 return try classExpression()
+
             case .async:
                 advance()
+                if case .identifier(let name) = currentToken()?.tokenType {
+                    if case .arrow = peekToken(aheadBy: 1)?.tokenType {
+                        return try parseArrowFunction(
+                            isAsync: true,
+                            ParenthesizedExpr: nil,
+                            OneArg: Expression.identifier(name)
+                        )
+                    }
+                } else if case .leftParen = currentToken()?.tokenType {
+                    if case .arrow = peekToken(aheadBy: 1)?.tokenType {
+                        let expr = try parseParenthesizedExpression()
+                        return try parseArrowFunction(
+                            isAsync: true,
+                            ParenthesizedExpr: expr,
+                            OneArg: nil
+                        )
+                    }
+                }
                 return try parseFunctionExpression(isAsync: true)
-            default: 
-                fatalError("Unexpected token in primary expression: \(String(describing: currentToken()))")
+
+        default:
+            fatalError("Unexpected token in nud expression: \(String(describing: currentToken()))")
         }
+    }
+
+
+
+
+    func parseNewExpression() throws -> Expression? {
         return nil
     }
+    func parseYieldExpression() throws -> Expression? {
+        return nil
+    }
+    func parseAwaitExpression() throws -> Expression? {
+        return nil
+    }
+
     func parseBinaryExpression() throws -> Expression? {
         return nil
     }
     func parseUnaryExpression() throws -> Expression? {
-        return nil
+        
+        guard case .unaryOp (let op) = currentToken()?.tokenType else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        advance() // consume operator
+        
+        guard let argument = try parseExpression(precedence: 0) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return Expression.unary(
+            operator_: .unaryOp(op),
+            argument: argument,
+            isPrefix: true
+        )
     }
     func parseAssignmentExpression() throws -> Expression? {
         return nil
@@ -347,6 +466,39 @@ extension Parser : Parsers {
         return nil
     }
 
+    func parseArrowFunction(isAsync: Bool, ParenthesizedExpr: Expression?, OneArg: Expression?) throws -> Expression? {
+        // ( ) => {}
+        // arg => ()
+        // ~~~ shown parts are already consumed
+
+        // decide whether ParenthesizedExpr or OneArg is used
+        if ParenthesizedExpr == nil && OneArg == nil {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        } else if ParenthesizedExpr != nil && OneArg != nil {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        
+        if case .parenthesized(let ParenExpr) = ParenthesizedExpr, ParenthesizedExpr != nil {
+            while case .identifier = ParenExpr {
+                
+                
+            }
+        } else if case .identifier(let argName) = OneArg, OneArg != nil {
+            
+        } else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        
+
+        if case .arrow = currentToken()?.tokenType {
+            advance() // consume '=>'
+        } 
+        //TODO: parse function body
+        
+        return nil   
+    }
+
     func classExpression() throws -> Expression? {
         return nil
     }
@@ -357,12 +509,14 @@ extension Parser : Parsers {
     func parseObjectLiteral() throws -> Expression? {
         return nil
     }
-    func parseArrowFunction() throws -> Expression? {
-        return nil
-    }
 
     func parseParenthesizedExpression() throws -> Expression? {
-        return nil
+        advance() // consume '('
+        
+        let expr = try parseExpression(precedence: 0) // parse inner expression
+
+        try expect(tokenType: .rightParen) // consume ')' 
+        return .parenthesized(expr)
     }
     
     // Statements
@@ -381,15 +535,17 @@ extension Parser : Parsers {
             } else {
                 throw ParserError.invalidSyntax(currentTokenIndex)
             }
+            try consumeSemicolon();
         }
 
         advance() // consume '}'
+        try consumeSemicolon(); // ASI after block
 
         return Statement.block(statements: body)
     }
     
     func parseExpressionStatement() throws -> Statement? {
-        if let expr = try parseExpression() {
+        if let expr = try parseExpression(precedence: 0) {
             try expect(tokenType: .semicolon) // consume ';'
             return Statement.expressionStatement(expr)
         }
@@ -397,7 +553,7 @@ extension Parser : Parsers {
     }
 
     func parseDeclarationStatement(isAsync: Bool) throws -> Statement? {
-        switch currentToken()?.tokenType {
+        switch  currentToken()?.tokenType {
             case .function:
                 if let decl = try parseFunctionDeclaration(isAsync: isAsync) {
                     return Statement.declarationStatement(decl)
@@ -490,13 +646,14 @@ extension Parser : Parsers {
             }
         }
 
-        var maybeAssignments: [Expression]? = nil
+        var maybeAssignments: [Expression] = []
 
-        if case .binaryOp(let op) = currentToken()?.tokenType, op == .assign     {
+        if case .binaryOp(let op) = currentToken()?.tokenType, 
+                op == .assign {
             advance()
             for _ in declarations {
-                if let expr = try parseExpression() {
-                    maybeAssignments?.append(expr)
+                if let expr = try parseExpression(precedence: 0) {
+                    maybeAssignments.append(expr)
                 } else {
                     throw ParserError.invalidSyntax(currentTokenIndex)
                 }
@@ -512,7 +669,10 @@ extension Parser : Parsers {
     //    var c = a + b;
     //    return c;
     //}
-        return nil
+        return .variable(
+            declarations: declarations,
+            assignments: maybeAssignments
+        )
     }
     
     func parseLexicalDeclaration() throws -> Declaration? {
@@ -547,7 +707,7 @@ extension Parser : Parsers {
             if case .binaryOp(let op) = currentToken()?.tokenType, op == .assign     {
                 advance() // consume '='
                 for _ in declarations {
-                    if let expr = try parseExpression() {
+                    if let expr = try parseExpression(precedence: 0) {
                         assignments?.append(expr)
                     } else {
                         throw ParserError.invalidSyntax(currentTokenIndex)
@@ -601,11 +761,10 @@ extension Parser : Parsers {
         return nil  
     }
     func parseReturnStatement() throws -> Statement? {
-        print("Parsing return statement...")
         
         advance() // consume 'return' keyword
 
-        if let expr = try parseExpression() {
+        if let expr = try parseExpression(precedence: 0) {
             return .returnStatement(argument: expr)
         } else {
             return .returnStatement(argument: nil)
