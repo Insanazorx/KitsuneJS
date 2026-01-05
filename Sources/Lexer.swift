@@ -114,14 +114,17 @@ public class Lexer {
             keywords: [
                 "if", "else", "while", "for", "return", "do", "throw", "try",
                 "function", "var", "let", "const", "of", "in", "switch", "export",
-                "class", "enum", "import", "break", "continue", "async"
+                "class", "enum", "import", "break", "continue", "async", "await",
+                "this", "super", "new", "typeof", "void", "delete", "yield", "catch", 
+                "finally", "default", "null", "true", "false", "undefined"
             ],
             operators: [
                 "==", "!=", "<=", ">=", "&&", "||",
                 "+", "-", "*", "/", "=", "<", ">", 
                 "=>", "++", "--", "+=", "-=", "*=", "/=",
                 "...", "?", ":", "!", ".", "&", "|",
-                "^", "%", "~", "===", "!=="
+                "^", "%", "~", "===", "!==" , "<<", ">>", ">>>",
+                "<<=", ">>=", ">>>="
             ]
         )
     }

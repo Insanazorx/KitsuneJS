@@ -87,16 +87,17 @@ public indirect enum Statement {
 
     case forInStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
     case forOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
+    case forAwaitOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
 
     case returnStatement(argument: Expression?)
-    case breakStatement(label: String?)
-    case continueStatement(label: String?)
+    case breakStatement
+    case continueStatement
 
     case throwStatement(argument: Expression)
 
     case tryStatement(
         block: Statement,
-        catchDeclarations: [Declaration?],
+        catchDeclarations: [Expression?],
         handler: Statement?,
         finalizer: Statement?
     )
@@ -403,22 +404,30 @@ extension Statement: CustomStringConvertible {
                 box("body", [body.toTreeBox()])
             ])
 
+        case .forAwaitOfStatement(let left, let leftExpr, let right, let body):
+            return box("Statement.forAwaitOf", [
+                boxOpt("leftDecl", left?.toTreeBox()),
+                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                box("right", [right.toTreeBox()]),
+                box("body", [body.toTreeBox()])
+            ])
+
         case .returnStatement(let argument):
             return box("Statement.return", [boxOpt("argument", argument?.toTreeBox())])
 
-        case .breakStatement(let label):
-            return box("Statement.break", [box("label: \(label ?? "<nil>")")])
+        case .breakStatement:
+            return box("Statement.break")
 
-        case .continueStatement(let label):
-            return box("Statement.continue", [box("label: \(label ?? "<nil>")")])
+        case .continueStatement:
+            return box("Statement.continue")
 
         case .throwStatement(let argument):
             return box("Statement.throw", [box("argument", [argument.toTreeBox()])])
 
-        case .tryStatement(let blockStmt, let catchDecls, let handler, let finalizer):
+        case .tryStatement(let block, let catchDeclarations, let handler, let finalizer):
             return box("Statement.try", [
-                box("block", [blockStmt.toTreeBox()]),
-                boxOptList("catchDeclarations", catchDecls.map { $0?.toTreeBox() }),
+                box("block", [block.toTreeBox()]),
+                boxOptList("catchDeclarations", catchDeclarations.map { $0?.toTreeBox() }),
                 boxOpt("handler", handler?.toTreeBox()),
                 boxOpt("finalizer", finalizer?.toTreeBox())
             ])

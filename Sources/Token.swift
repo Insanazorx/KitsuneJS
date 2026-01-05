@@ -10,7 +10,7 @@ public enum TokenType : Equatable {
     case `async`, `await`, `break`, `case`, `catch`, `class`
     case `const`, `continue`, `default`, `do`, `else`, `enum`
     case `eval`, `export`, `extends`, `false`, `finally`, `for`
-    case `function`, `if`, `import`, `in`, `let`
+    case `function`, `if`, `import`, `let`
     case `new`, `of`, `return`, `super`, `switch`, `this`, `throw`
     case `true`, `try`, `var`, `while`, `yield`
 
@@ -30,7 +30,7 @@ public enum BinaryOperation{
     case logicalAnd, logicalOr, instanceof
     case plus, minus, multiply, divide, assign
     case plusAssign, minusAssign, multiplyAssign, divideAssign
-    case caret, percent, ampersand, pipe
+    case caret, percent, ampersand, pipe, `in`
     case strictEqual, strictNotEqual
 }
 
@@ -87,7 +87,7 @@ public struct Token: CustomStringConvertible, Equatable {
             case "function": return .function
             case "if": return .if
             case "import": return .import
-            case "in": return .in
+            case "in": return .binaryOp(.in)
             case "instanceof": return .binaryOp(.instanceof)
             case "let": return .let
             case "new": return .new
@@ -104,6 +104,7 @@ public struct Token: CustomStringConvertible, Equatable {
             case "var": return .var
             case "void": return .unaryOp(.void)
             case "while": return .while
+            case "yield": return .yield
             
             
             // operators        
