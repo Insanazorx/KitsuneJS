@@ -26,6 +26,7 @@ public indirect enum Expression {
 
     case call(callee: Expression, arguments: [Expression])
     case member(object: Expression, property: Expression)
+    case computedMember(object: Expression, property: Expression)
     case sequence (expressions: [Expression])
     case new(callee: Expression, arguments: [Expression?])
     case yield(argument: Expression?)
@@ -48,7 +49,7 @@ public indirect enum Expression {
     )
 
 
-    case arrowFunction(params: [Expression?], body: Expression)
+    case arrowFunction(params: [Expression?], body: Statement, isAsync: Bool)
 
     case parenthesized(Expression?)
 }
@@ -260,6 +261,11 @@ extension Expression: CustomStringConvertible {
                 box("object", [object.toTreeBox()]),
                 box("property", [property.toTreeBox()])
             ])
+        case .computedMember(let object, let property):
+            return box("Expression.computedMember", [
+                box("object", [object.toTreeBox()]),
+                box("property", [property.toTreeBox()])
+            ])
 
         case .sequence(let expressions):
             return box("Expression.sequence", [boxList("expressions", expressions.map { $0.toTreeBox() })])
@@ -302,10 +308,11 @@ extension Expression: CustomStringConvertible {
                 boxList("body", body.map { $0.toTreeBox() })
             ])
 
-        case .arrowFunction(let params, let body):
+        case .arrowFunction(let params, let body, let isAsync):
             return box("Expression.arrowFunction", [
                 boxOptList("params", params.map { $0?.toTreeBox() }),
-                box("body", [body.toTreeBox()])
+                box("body", [body.toTreeBox()]),
+                box("async: \(isAsync)")
             ])
 
         case .parenthesized(let expr):

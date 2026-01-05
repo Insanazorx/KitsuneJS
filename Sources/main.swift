@@ -2,7 +2,9 @@ import Foundation
 
 let src = """
     function add(a, b) {
-        var c = (a + b) * !c;
+        var c = () => {
+            return a + b;
+        };
         return c;
     }
 """
