@@ -3,23 +3,11 @@ import Foundation
 
 //TODO: while(true)i++;
 let src = """
-async function fetchData(url) {
-    try {
-        let response = await fetch(url).then(res => {
-            setTimeout(async () => {
-                console.log("Fetched:", res);
-            }, 1000);
-            return res;
-        });
-
-        if (response.status == 200) {
-            return await response.json();
-        } else {
-            throw new Error("Failed to fetch data");
-        }
-    } catch (error) {
-        console.log("Error:", error);
-        return null;
+for (i = 0; i < 10; i++) {
+    if (i % 2 == 0) {
+        console.log("Even:", i);
+    } else {
+        console.log("Odd:", i);
     }
 }
 """
