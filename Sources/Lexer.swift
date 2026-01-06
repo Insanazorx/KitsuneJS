@@ -145,33 +145,70 @@ public class Lexer {
 
     
     public func tokenize() -> [Token] {
-        var tokens: [Token] = []
+    var tokens: [Token] = []
+    var lineTerminatorSeen = false
 
-        while !isAtEnd {
-        
-            if let ws = match(.whitespace) { advance(by: ws.count); continue }
-            if let com = match(.comment) { advance(by: com.count); continue }
+    func containsLineTerminator(_ s: String) -> Bool {
+        return s.contains("\n") || s.contains("\r") || s.contains("\u{2028}") || s.contains("\u{2029}")
+    }
 
-            if let s = match(.string) { tokens.append(Token(lexType: .string, lexeme: s)); advance(by: s.count); continue }
-            if let n = match(.number) { tokens.append(Token(lexType: .number, lexeme: n)); advance(by: n.count); continue }
+    while !isAtEnd {
 
-            if let ident = match(.identifier) {
-                let kind: LexemeType = keywords.contains(ident) ? .keyword : .identifier
-                tokens.append(Token(lexType: kind, lexeme: ident))
-                advance(by: ident.count)
-                continue
-            }
-
-            if let op = match(.operatorSymbol) { tokens.append(Token(lexType: .operatorSymbol, lexeme: op)); advance(by: op.count); continue }
-
-        
-            if let p = match(.punctuation) { tokens.append(Token(lexType: .punctuation, lexeme: p)); advance(by: p.count); continue }
-
-            let ch = String(rest.prefix(1))
-            tokens.append(Token(lexType: .punctuation, lexeme: ch))
-            advance(by: ch.count)
+        if let ws = match(.whitespace) {
+            if containsLineTerminator(ws) { lineTerminatorSeen = true }
+            advance(by: ws.count)
+            continue
         }
 
-        return tokens
+        if let com = match(.comment) {
+            // line comment match'i newline'ı içermez; block comment newline içerebilir.
+            if com.hasPrefix("/*") && containsLineTerminator(com) { lineTerminatorSeen = true }
+            advance(by: com.count)
+            continue
+        }
+
+        if let s = match(.string) {
+            tokens.append(Token(lexType: .string, lexeme: s, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: s.count)
+            continue
+        }
+
+        if let n = match(.number) {
+            tokens.append(Token(lexType: .number, lexeme: n, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: n.count)
+            continue
+        }
+
+        if let ident = match(.identifier) {
+            let kind: LexemeType = keywords.contains(ident) ? .keyword : .identifier
+            tokens.append(Token(lexType: kind, lexeme: ident, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: ident.count)
+            continue
+        }
+
+        if let op = match(.operatorSymbol) {
+            tokens.append(Token(lexType: .operatorSymbol, lexeme: op, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: op.count)
+            continue
+        }
+
+        if let p = match(.punctuation) {
+            tokens.append(Token(lexType: .punctuation, lexeme: p, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: p.count)
+            continue
+        }
+
+        let ch = String(rest.prefix(1))
+        tokens.append(Token(lexType: .punctuation, lexeme: ch, isPreceededByLineTerminator: lineTerminatorSeen))
+        lineTerminatorSeen = false
+        advance(by: ch.count)
     }
+
+    return tokens
+}
 }

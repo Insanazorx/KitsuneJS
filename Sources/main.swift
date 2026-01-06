@@ -6,7 +6,7 @@ let src = """
 async function fetchData(url) {
     try {
         let response = await fetch(url).then(res => {
-            setTimeout(() => {
+            setTimeout(async () => {
                 console.log("Fetched:", res);
             }, 1000);
             return res;
@@ -25,11 +25,7 @@ async function fetchData(url) {
 """
 
 let src2 = """
-function test() {
-    throw a;
-    throw new Error("This is a test error");
-    new TypeError("This is a type error");    
-}
+
 """
 
 
@@ -46,7 +42,6 @@ func main() {
     } catch {
         print("Parsing error: \(error)");
     }
-    
     
 }
 

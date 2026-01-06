@@ -45,10 +45,13 @@ public enum UpdateOperation {
 }
 
 public struct Token: CustomStringConvertible, Equatable {
-    public var description: String { "Token(\(lexType), \"\(lexeme)\")" }
+    public var description: String { "Token(\(lexType), \"\(lexeme)\")" + (isPreceededByLineTerminator ? " preceded by line terminator" : "") }
     
+    //for debugging
     public let lexType: Lexer.LexemeType
     public let lexeme: String
+
+    public let isPreceededByLineTerminator: Bool
 
     public var tokenType: TokenType? {
         switch lexType {

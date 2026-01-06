@@ -413,15 +413,21 @@ extension Parser : Parsers {
                         )
                     }
                 } else if case .leftParen = currentToken()?.tokenType {
-                    if case .arrow = peekToken(aheadBy: 1)?.tokenType {
-                        let expr = try parseParenthesizedExpression()
+                   
+                    let expr = try parseParenthesizedExpression()
+                        
                         return try parseArrowFunction(
                             isAsync: true,
                             Args: expr! //TODO: make it safer
                         )
-                    }
+                    
                 }
-                return try parseFunctionExpression(isAsync: true)
+                
+                guard let expr = try parseFunctionExpression(isAsync: true) else {
+                    throw ParserError.invalidSyntax(currentTokenIndex)
+                }
+
+                return expr;
 
         default:
             fatalError("Unexpected token in nud expression: \(String(describing: currentToken()))")
@@ -705,7 +711,7 @@ extension Parser : Parsers {
         }
 
         try expect(tokenType: .rightBrace) // consume '}'
-        try consumeSemicolon() // optional semicolon after block
+        
 
         return Statement.block(statements: body)
     }
@@ -831,10 +837,8 @@ extension Parser : Parsers {
             }
         }
     
-    //function add(a, b) {
-    //    var c = a + b;
-    //    return c;
-    //}
+        try consumeSemicolon()
+
         return .variable(
             declarations: declarations,
             assignments: maybeAssignments
@@ -886,7 +890,7 @@ extension Parser : Parsers {
                 }
             }
     
-            try expect(tokenType: .semicolon) // consume ';'
+            try consumeSemicolon()
     
             return .lexical(kind: kind, declarations: declarations, assignments: assignments)
         
@@ -967,6 +971,8 @@ extension Parser : Parsers {
         }
         try expect(tokenType: .rightParen); // consume ')'
 
+        try consumeSemicolon(); // consume optional semicolon after do-while
+
         return Statement.doWhileStatement(
             body: bodyStmt,
             test: testExpr
@@ -988,18 +994,22 @@ extension Parser : Parsers {
         advance() // consume 'return' keyword
 
         if let expr = try parseExpression(precedence: 0) {
+            try consumeSemicolon();
             return .returnStatement(argument: expr)
         } else {
+            try consumeSemicolon();
             return .returnStatement(argument: nil)
         }
     }
     func parseBreakStatement() throws -> Statement? {
         advance() // consume 'break' keyword
+        try consumeSemicolon();
         return .breakStatement
     }
 
     func parseContinueStatement() throws -> Statement? {
         advance()
+        try consumeSemicolon();
         return .continueStatement
     }
 
@@ -1008,6 +1018,7 @@ extension Parser : Parsers {
         guard let expr = try parseExpression(precedence: 0) else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
+        try consumeSemicolon();
         return .throwStatement(argument: expr)
     }
 
