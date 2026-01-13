@@ -3,12 +3,8 @@ import Foundation
 
 //TODO: while(true)i++;
 let src = """
-for (i = 0; i < 10; i++) {
-    if (i % 2 == 0) {
-        console.log("Even:", i);
-    } else {
-        console.log("Odd:", i);
-    }
+for await (let item of [1,a = 0,2]) {
+    console.log(item);
 }
 """
 
