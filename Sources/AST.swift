@@ -33,7 +33,6 @@ public indirect enum Expression {
     case await(argument: Expression)
 
     case arrayLiteral(elements: [Expression])
-    case objectLiteral(properties: [String: Expression])
     case functionExpression(
         name: Expression?,
         params: [Expression?],
@@ -52,7 +51,24 @@ public indirect enum Expression {
     case arrowFunction(params: [Expression?], body: Statement, isAsync: Bool)
 
     case parenthesized(Expression?)
+    case objectLiteral(properties: [ObjectProperty])
+
 }
+
+    public enum ObjectProperty {
+        case property(key: PropertyKey, value: Expression)     // a: expr
+        case shorthand(PropertyKey)                            // {a}
+        case method(key: PropertyKey, value: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
+        case getter(key: PropertyKey, value: Statement)      // {get x(){}}
+        case setter(key: PropertyKey, value: Statement)      // {set x(v){}}
+        case spread(argument: Expression)                       // {...obj}
+    }
+
+    public enum PropertyKey {
+        case identifier(String)
+        case literal(Literal)
+        case computed(Expression)  // {[expr]: ...}
+    }
 
 // Literals
     public indirect enum Literal {
@@ -288,10 +304,9 @@ extension Expression: CustomStringConvertible {
             return box("Expression.arrayLiteral", [boxList("elements", elements.map { $0.toTreeBox() })])
 
         case .objectLiteral(let properties):
-            let props = properties
-                .sorted(by: { $0.key < $1.key })
-                .map { key, value in box("\(key)", [value.toTreeBox()]) }
-            return box("Expression.objectLiteral", [boxList("properties", props)])
+            return box("Expression.objectLiteral", [
+                boxList("properties", properties.map { $0.toTreeBox() })
+            ])
 
         case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
             return box("Expression.functionExpression", [
@@ -321,6 +336,61 @@ extension Expression: CustomStringConvertible {
                 return box("Expression.parenthesized", [e.toTreeBox()])
             }
             return box("Expression.parenthesized", [box("<nil>")])
+        }
+    }
+}
+
+// MARK: - Object literal Tree View
+
+private extension PropertyKey {
+    func toTreeBox() -> TreeBox {
+        switch self {
+        case .identifier(let name):
+            return box("PropertyKey.identifier(\(name))")
+        case .literal(let lit):
+            return box("PropertyKey.literal", [lit.toTreeBox()])
+        case .computed(let expr):
+            return box("PropertyKey.computed", [expr.toTreeBox()])
+        }
+    }
+}
+
+private extension ObjectProperty {
+    func toTreeBox() -> TreeBox {
+        switch self {
+        case .property(let key, let value):
+            return box("ObjectProperty.property", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()])
+            ])
+
+        case .shorthand(let name):
+            return box("ObjectProperty.shorthand(\(name))")
+
+        case .method(let key, let value, let isAsync, let isGenerator):
+            return box("ObjectProperty.method", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()]),
+                box( "isAsync: \(isAsync)"),
+                box( "isGenerator: \(isGenerator)")
+            ])
+
+        case .getter(let key, let value):
+            return box("ObjectProperty.getter", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()])
+            ])
+
+        case .setter(let key, let value):
+            return box("ObjectProperty.setter", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()])
+            ])
+
+        case .spread(let argument):
+            return box("ObjectProperty.spread", [
+                box("argument", [argument.toTreeBox()])
+            ])
         }
     }
 }

@@ -1,11 +1,8 @@
 import Foundation
 
 
-//TODO: while(true)i++;
 let src = """
-for await (let item of [1,a = 0,2]) {
-    console.log(item);
-}
+if (true) ({ [ (()=>{return 3})() ] : 1, b : 2});
 """
 
 let src2 = """
