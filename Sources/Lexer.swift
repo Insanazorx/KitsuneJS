@@ -1,5 +1,7 @@
 import Foundation
 
+
+// define token between apostrophes as a string 
 public class Lexer {
     // Lexeme kinds the lexer can recognize
     public enum LexemeType: CaseIterable, Equatable, CustomStringConvertible {

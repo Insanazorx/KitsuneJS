@@ -58,9 +58,9 @@ public indirect enum Expression {
     public enum ObjectProperty {
         case property(key: PropertyKey, value: Expression)     // a: expr
         case shorthand(PropertyKey)                            // {a}
-        case method(key: PropertyKey, value: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
-        case getter(key: PropertyKey, value: Statement)      // {get x(){}}
-        case setter(key: PropertyKey, value: Statement)      // {set x(v){}}
+        case method(key: PropertyKey, args: [Expression?], body: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
+        case getter(key: PropertyKey, body: Statement)      // {get x(){}}
+        case setter(key: PropertyKey, arg: Expression, body: Statement)      // {set x(v){}}
         case spread(argument: Expression)                       // {...obj}
     }
 
@@ -367,24 +367,26 @@ private extension ObjectProperty {
         case .shorthand(let name):
             return box("ObjectProperty.shorthand(\(name))")
 
-        case .method(let key, let value, let isAsync, let isGenerator):
+        case .method(let key, let args, let body, let isAsync, let isGenerator):
             return box("ObjectProperty.method", [
                 box("key", [key.toTreeBox()]),
-                box("value", [value.toTreeBox()]),
+                boxOptList("args", args.map { $0?.toTreeBox() }),
+                box("body", [body.toTreeBox()]),
                 box( "isAsync: \(isAsync)"),
                 box( "isGenerator: \(isGenerator)")
             ])
 
-        case .getter(let key, let value):
+        case .getter(let key, let body):
             return box("ObjectProperty.getter", [
                 box("key", [key.toTreeBox()]),
-                box("value", [value.toTreeBox()])
+                box("body", [body.toTreeBox()])
             ])
 
-        case .setter(let key, let value):
+        case .setter(let key, let arg, let body):
             return box("ObjectProperty.setter", [
                 box("key", [key.toTreeBox()]),
-                box("value", [value.toTreeBox()])
+                box("arg", [arg.toTreeBox()]),
+                box("body", [body.toTreeBox()])
             ])
 
         case .spread(let argument):

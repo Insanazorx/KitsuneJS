@@ -2,7 +2,15 @@ import Foundation
 
 
 let src = """
-if (true) ({ [ (()=>{return 3})() ] : 1, b : 2});
+if (true) ({ 
+    g,
+    a: 1, 
+    get [b + "_1"]() { return 2; }, 
+    set [c + "_1"](x) { this._c = x; }, 
+    [d + "_1"]() { return 3; },
+    *[e+"_1"]() {return 4; },
+    async [f + "_1"]() { return 5; }
+    }) 
 """
 
 let src2 = """

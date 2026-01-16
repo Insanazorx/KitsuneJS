@@ -93,17 +93,17 @@ protocol Parsers {
     func parseClassExpression() throws -> Expression?
     func parseArrayLiteral() throws -> Expression?                                              // done  
     
-    func parseObjectLiteral() throws -> Expression?
+    func parseObjectLiteral() throws -> Expression?                                             // done
 
     //dispatcher for object property parsing
-    func parseObjectProperty() throws -> ObjectProperty?
-    func parsePropertyKey() throws -> PropertyKey?
+    func parseObjectProperty() throws -> ObjectProperty?                                        // done
+    func parsePropertyKey() throws -> PropertyKey?                                              // done
 
     // helpers for parseObjectProperty
-    func parsePropertyDefinition(computedKey: PropertyKey?) throws -> ObjectProperty?
-    func parseMethodDefinition(computedKey: PropertyKey?, isAsync: Bool, isGenerator: Bool) throws -> ObjectProperty?
-    func parseGetterDefinition(computedKey: PropertyKey?) throws -> ObjectProperty?
-    func parseSetterDefinition(computedKey: PropertyKey?) throws -> ObjectProperty?
+    func parsePropertyDefinition(computedKey: PropertyKey?) throws -> ObjectProperty?           // done
+    func parseMethodDefinition(computedKey: PropertyKey?, isAsync: Bool, isGenerator: Bool) throws -> ObjectProperty? //done
+    func parseGetterDefinition() throws -> ObjectProperty?                                      // done  
+    func parseSetterDefinition() throws -> ObjectProperty?                                      // done   
     func parseSpreadProperty() throws -> ObjectProperty?
 
 
@@ -791,9 +791,12 @@ extension Parser : Parsers {
     *
     *   - '*' Identifier '(' → GeneratorMethod
     *   - '*' '[' expr ']' '(' → GeneratorComputedMethod
+    *
     *   - Identifier '(' → Method
     *   - '[' expr ']' '(' → ComputedMethod
+    *   
     *   - key ':' expr → KeyValueProperty
+    *   
     *   - Identifier → Shorthand
     *   - '...' expr → Spread    
     *
@@ -819,6 +822,22 @@ extension Parser : Parsers {
                 return try parseMethodDefinition(isAsync: true, isGenerator: false)
 
             case .binaryOp(.multiply):
+
+                advance() // consume 'async' keyword
+                
+                if case .leftBracket = currentToken()?.tokenType {
+                    
+                    guard let key = try parsePropertyKey() else {
+                        throw ParserError.invalidSyntax(currentTokenIndex)
+                    }
+                    switch currentToken()?.tokenType {
+                        case .leftParen:
+                            return try parseMethodDefinition(computedKey: key, isAsync: false, isGenerator: true)
+                        default:
+                            throw ParserError.invalidSyntax(currentTokenIndex)
+                    }
+                }
+
                 return try parseMethodDefinition(isAsync: false, isGenerator: true)
             
             case .identifier(let name) where name == "get":
@@ -896,7 +915,7 @@ extension Parser : Parsers {
                 advance() // consume undefined
                 return PropertyKey.literal(.undefined)
 
-            case .leftBracket: //BURAYA BAK gereksiz olabilir bu kısım çünkü computedKey varsa önceden parse ediliyor.
+            case .leftBracket:
                 
                 advance() // consume '['
 
@@ -950,15 +969,95 @@ extension Parser : Parsers {
     }
 
     func parseMethodDefinition(computedKey: PropertyKey? = nil, isAsync: Bool, isGenerator: Bool) throws -> ObjectProperty? {
-        return nil
+    
+        var name: PropertyKey?
+
+        if case .computed = computedKey {
+            // already consumed '[' expr ']'
+            name = computedKey
+        } else {
+            name = try parsePropertyKey()
+        }
+
+        guard name != nil else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+
+        var args: [Expression?] = []
+
+        while currentToken()?.tokenType != .rightParen {
+            if let param = try parseExpression(precedence: 0, allowComma: false) {
+                args.append(param)
+            }
+
+            if case .comma = currentToken()?.tokenType {
+                advance() // consume ','
+                continue
+            }
+        }
+
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let body: Statement = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return ObjectProperty.method(
+            key: name!,
+            args: args,
+            body: body,
+            isAsync: isAsync,
+            isGenerator: isGenerator
+        )
+
+        
     }
 
-    func parseGetterDefinition(computedKey: PropertyKey? = nil) throws -> ObjectProperty? {
-        return nil
+    func parseGetterDefinition() throws -> ObjectProperty? {
+        advance() // consume 'get' keyword
+
+        guard let name = try parsePropertyKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let body: Statement = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        return ObjectProperty.getter(
+            key: name,
+            body: body
+        )
     }
 
-    func parseSetterDefinition(computedKey: PropertyKey? = nil) throws -> ObjectProperty? {
-        return nil
+    func parseSetterDefinition() throws -> ObjectProperty? {
+        advance() // consume 'set' keyword
+
+        guard let name = try parsePropertyKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+
+        guard let arg = try parseExpression(precedence: 0, allowComma: false) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let body: Statement = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return ObjectProperty.setter(
+            key: name,
+            arg: arg,
+            body: body
+        )
     }
 
     func parseSpreadProperty() throws -> ObjectProperty? {

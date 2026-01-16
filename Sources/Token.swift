@@ -150,6 +150,7 @@ public struct Token: CustomStringConvertible, Equatable {
             case ";": return .semicolon
             case ":": return .colon
             case ",": return .comma
+            
             default: fatalError("Unknown token lexeme: \(lexeme)")
         }
     }
