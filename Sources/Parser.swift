@@ -103,7 +103,7 @@ protocol Parsers {
     func parseClassGetterDefinition(isStatic: Bool) throws -> ClassElement?
     func parseClassSetterDefinition(isStatic: Bool) throws -> ClassElement?
     func parseClassMethodDefinition(parsedKey: ClassElementKey?, isStatic: Bool) throws -> ClassElement?                      
-    func parseClassFieldDefinition(isStatic: Bool) throws -> ClassElement?
+    func parseClassFieldDefinition(parsedKey: ClassElementKey, isStatic: Bool) throws -> ClassElement?
     func parseStaticBlockDefinition() throws -> ClassElement?                       // done
 
     func parseObjectLiteral() throws -> Expression?                                             // done
@@ -143,12 +143,14 @@ protocol ParserCore {
 public class Parser {
     let tokens: [Token];
     var currentTokenIndex: Int = 0;
-
+    
     public init(_ input: [Token]) {
         self.tokens = input;
         print ("Tokens:");
+        var i = 0
         for token in tokens {
-            print (token.description);
+            print ("\(i): \(token.description)");
+            i += 1
         }
     }
 }
@@ -249,6 +251,9 @@ extension Parser : ParserCore {
         }
         if currentToken() == nil || currentToken()?.tokenType == .rightBrace {
             return // ASI
+        }
+        if currentToken()?.isPreceededByLineTerminator == true {
+            return
         }
         throw ParserError.unexpectedToken(currentTokenIndex)
     }
@@ -642,14 +647,22 @@ extension Parser : Parsers {
         
             advance() // consume '.'
             
-            guard case let .identifier(propertyName) = currentToken()?.tokenType else {
+            var identifier: Expression
+
+            if case .identifier(let propertyName) = currentToken()?.tokenType {
+                identifier = Expression.identifier(propertyName)
+
+            } else if case .privateIdentifier(let privateName) = currentToken()?.tokenType {
+                identifier = Expression.privateIdentifier(privateName)
+
+            } else {
                 throw ParserError.unexpectedToken(currentTokenIndex)
             }
             advance() // consume property identifier
 
-            return Expression.member(
+            return .member(
                 object: lhs,
-                property: .identifier(propertyName)
+                property: identifier
             )
         
     
@@ -745,12 +758,10 @@ extension Parser : Parsers {
             
             advance() // consume 'extends' keyword
 
-            if case .identifier(let superClassName) = currentToken()?.tokenType {
-                maybeSuperClassName = Expression.identifier(superClassName)
-                advance() // consume super class name
-            } else {
-                throw ParserError.unexpectedToken(currentTokenIndex)
+            guard let superClassName = try parseExpression(precedence: 0) else {
+                throw ParserError.invalidSyntax(currentTokenIndex)
             }
+            maybeSuperClassName = superClassName
         
         }
 
@@ -805,7 +816,7 @@ extension Parser : Parsers {
             case .binaryOp(.multiply), .async:
                 return try parseClassMethodDefinition(isStatic: false)
             
-            case .identifier(let name) where name == "static":
+            case .static:
                 advance() // consume 'static' keyword
                 switch currentToken()?.tokenType {
                     
@@ -830,7 +841,7 @@ extension Parser : Parsers {
                         if case .leftParen = currentToken()?.tokenType {
                             return try parseClassMethodDefinition(parsedKey: parsedKey, isStatic: true)
                         } else {
-                            return try parseClassFieldDefinition(isStatic: true)
+                            return try parseClassFieldDefinition(parsedKey: parsedKey, isStatic: true)
                         } 
                     }
             
@@ -842,7 +853,7 @@ extension Parser : Parsers {
                 if case .leftParen = currentToken()?.tokenType {
                     return try parseClassMethodDefinition(parsedKey: parsedKey, isStatic: false)
                 } else {
-                    return try parseClassFieldDefinition(isStatic: false)
+                    return try parseClassFieldDefinition(parsedKey: parsedKey, isStatic: false)
                 }
         }
     }
@@ -974,7 +985,11 @@ extension Parser : Parsers {
             let arg = try parseExpression(precedence: 0, allowComma: false)
             args.append(arg!)
 
-            try expect(tokenType: .comma) // consume ','
+            if case .comma = currentToken()?.tokenType {
+                advance()                               // consume ','
+            } else {
+                break
+            }
         }
 
         try expect(tokenType: .rightParen) // consume ')'
@@ -992,10 +1007,9 @@ extension Parser : Parsers {
             isGenerator: isGenerator
         )
     }                      
-    func parseClassFieldDefinition(isStatic: Bool) throws -> ClassElement?{
-        guard let key = try parseClassElementKey() else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
+    func parseClassFieldDefinition(parsedKey: ClassElementKey, isStatic: Bool) throws -> ClassElement?{
+        
+        // key already consumed
 
         var initializer: Expression? = nil
 
@@ -1008,13 +1022,13 @@ extension Parser : Parsers {
         try consumeSemicolon()
 
         return .field(
-            key: key,
+            key: parsedKey,
             initializer: initializer,
             isStatic: isStatic
         )
     }
     func parseStaticBlockDefinition() throws -> ClassElement?{
-        advance() // consume 'static' keyword
+        // static keyword is already consumed
         guard let bodyStmt = try parseBlockStatement() else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
@@ -1199,6 +1213,9 @@ extension Parser : Parsers {
     func parsePropertyKey() throws -> PropertyKey? {
 
         switch currentToken()?.tokenType {
+            case .this:
+                advance() // consume 'this'
+                return PropertyKey.identifier("this")
             case .identifier(let name):
                 advance() // consume identifier
                 return PropertyKey.identifier(name)
@@ -1412,9 +1429,8 @@ extension Parser : Parsers {
         while currentToken()?.tokenType != .rightBrace {
             if let stmt = try parseStatement() {
                 body.append(stmt)
-            } else {
-                throw ParserError.invalidSyntax(currentTokenIndex)
-            }
+                try consumeSemicolon();
+            } 
         }
 
         try expect(tokenType: .rightBrace) // consume '}'
@@ -1666,12 +1682,10 @@ extension Parser : Parsers {
             
             advance() // consume 'extends' keyword
 
-            if case .identifier(let superClassName) = currentToken()?.tokenType {
-                maybeSuperClassName = Expression.identifier(superClassName)
-                advance() // consume super class name
-            } else {
-                throw ParserError.unexpectedToken(currentTokenIndex)
+           guard let superClassName = try parseExpression(precedence: 0) else {
+                throw ParserError.invalidSyntax(currentTokenIndex)
             }
+            maybeSuperClassName = superClassName
         
         }
 

@@ -643,6 +643,16 @@ extension ClassElementKey: CustomStringConvertible {
         }
     }
 }
+private extension ClassElementKey {
+    func toTreeBox() -> TreeBox {
+        switch self {
+        case .publicKey(let pk):
+            return box("ClassElementKey.publicKey", [pk.toTreeBox()])
+        case .privateName(let expr):
+            return box("ClassElementKey.privateName", [expr.toTreeBox()])
+        }
+    }
+}
 
 extension ClassElement: CustomStringConvertible {
     public var description: String { renderTree(toTreeBox()) }
@@ -657,14 +667,14 @@ extension ClassElement: CustomStringConvertible {
 
         case .getter(let key, let body, let isStatic):
             return box("ClassElement.getter", [
-                box("key", [box(key.description)]),
+                box("key", [key.toTreeBox()]),
                 box("body", [body.toTreeBox()]),
                 box("isStatic: \(isStatic)")
             ])
 
         case .setter(let key, let param ,let body, let isStatic):
             return box("ClassElement.setter", [
-                box("key", [box(key.description)]),
+                box("key", [key.toTreeBox()]),
                 boxOpt("param", param.toTreeBox()),
                 box("body", [body.toTreeBox()]),
                 box("isStatic: \(isStatic)")
@@ -672,7 +682,7 @@ extension ClassElement: CustomStringConvertible {
 
         case .member(let key, let params, let body, let isStatic, let isAsync, let isGenerator):
             return box("ClassElement.member", [
-                box("key", [box(key.description)]),
+                box("key", [key.toTreeBox()]),
                 boxOptList("params", params.map { $0?.toTreeBox() }),
                 box("body", [body.toTreeBox()]),
                 box("isStatic: \(isStatic)"),
@@ -682,7 +692,7 @@ extension ClassElement: CustomStringConvertible {
 
         case .field(let key, let initializer, let isStatic):
             return box("ClassElement.field", [
-                box("key", [box(key.description)]),
+                box("key", [key.toTreeBox()]),
                 boxOpt("initializer", initializer?.toTreeBox()),
                 box("isStatic: \(isStatic)")
             ])
