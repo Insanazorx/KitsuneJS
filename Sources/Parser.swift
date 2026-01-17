@@ -44,7 +44,7 @@ protocol Parsers {
     func parseLexicalDeclaration() throws -> Declaration?                                       // done       
     func parseImportDeclaration() throws -> Declaration?                                          
     func parseExportDeclaration() throws -> Declaration?
-    func parseClassDeclaration() throws -> Declaration?
+    func parseClassDeclaration() throws -> Declaration? //helpers are declared below near parseClassExpression()
 
     // Statements
 
@@ -90,9 +90,22 @@ protocol Parsers {
     func parseAwaitExpression() throws -> Expression?                                           // done 
 
     func parseFunctionExpression(isAsync: Bool) throws -> Expression?
-    func parseClassExpression() throws -> Expression?
     func parseArrayLiteral() throws -> Expression?                                              // done  
     
+    func parseClassExpression() throws -> Expression?
+
+    //dispatcher for class element parsing
+    func parseClassElement() throws -> ClassElement?
+    func parseClassElementKey() throws -> ClassElementKey?
+    
+    //helpers for parseClassElement
+    func parseClassConstructorDefinition() throws -> ClassElement?                                 // done
+    func parseClassGetterDefinition(isStatic: Bool) throws -> ClassElement?
+    func parseClassSetterDefinition(isStatic: Bool) throws -> ClassElement?
+    func parseClassMethodDefinition(parsedKey: ClassElementKey?, isStatic: Bool) throws -> ClassElement?                      
+    func parseClassFieldDefinition(isStatic: Bool) throws -> ClassElement?
+    func parseStaticBlockDefinition() throws -> ClassElement?                       // done
+
     func parseObjectLiteral() throws -> Expression?                                             // done
 
     //dispatcher for object property parsing
@@ -312,6 +325,8 @@ extension Parser : ParserCore {
                 return try parseAsyncStatement()
             case .semicolon:
                 return try parseEmptyStatement()
+            case .identifier where peekToken(aheadBy: 1)?.tokenType == .colon:
+                return try parseLabelledStatement()
             default:
                 break
         }
@@ -399,7 +414,12 @@ extension Parser : Parsers {
         guard let tok = currentToken()?.tokenType else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
+
         switch tok {
+            case .privateIdentifier(let string):
+                advance()
+                return Expression.privateIdentifier(string)
+
             case .new:
                 return try parseNewExpression()
             case .yield:
@@ -708,8 +728,300 @@ extension Parser : Parsers {
     }
 
     func parseClassExpression() throws -> Expression? {
-        return nil
+
+        advance() // consume 'class' keyword
+
+        //class expression may have optional name
+        var name: Expression? = nil
+        
+        if case .identifier(let className) = currentToken()?.tokenType {
+            name = Expression.identifier(className)
+            advance() // consume class name
+        }
+        
+        var maybeSuperClassName: Expression? = nil
+        
+        if case .extends = currentToken()?.tokenType {
+            
+            advance() // consume 'extends' keyword
+
+            if case .identifier(let superClassName) = currentToken()?.tokenType {
+                maybeSuperClassName = Expression.identifier(superClassName)
+                advance() // consume super class name
+            } else {
+                throw ParserError.unexpectedToken(currentTokenIndex)
+            }
+        
+        }
+
+        try expect(tokenType: .leftBrace) // consume '{'
+
+        if case .rightBrace = currentToken()?.tokenType {
+            advance() // consume '}'
+            return .classExpression(
+                name: name,
+                superClass: maybeSuperClassName,
+                body: []
+            )
+        }
+
+        var bodyElements: [ClassElement] = []
+
+        while currentToken()?.tokenType != .rightBrace {
+            
+            if let element = try parseClassElement() {
+                bodyElements.append(element)
+            } 
+
+            try consumeSemicolon()
+
+        }
+
+        try expect(tokenType: .rightBrace) // consume '}'
+
+        return .classExpression(
+            name: name,
+            superClass: maybeSuperClassName,
+            body: bodyElements
+        )
     }
+    
+    func parseClassElement() throws -> ClassElement? {
+        switch currentToken()?.tokenType {
+
+            case .semicolon:
+                advance() // consume ';'
+                return .empty
+            
+            case .identifier(let name) where name == "constructor":
+                return try parseClassConstructorDefinition()
+            
+            case .identifier(let name) where name == "get":
+                return try parseClassGetterDefinition(isStatic: false)
+            
+            case .identifier(let name) where name == "set":
+                return try parseClassSetterDefinition(isStatic: false)
+            
+            case .binaryOp(.multiply), .async:
+                return try parseClassMethodDefinition(isStatic: false)
+            
+            case .identifier(let name) where name == "static":
+                advance() // consume 'static' keyword
+                switch currentToken()?.tokenType {
+                    
+                    case .identifier(let name) where name == "get":
+                        return try parseClassGetterDefinition(isStatic: true)
+                    
+                    case .identifier(let name) where name == "set":
+                        return try parseClassSetterDefinition(isStatic: true)
+                    
+                    case .leftBrace:
+                        return try parseStaticBlockDefinition()
+                    
+                    case .binaryOp(.multiply), .async:
+                        return try parseClassMethodDefinition(isStatic: true)
+                    
+                    default:
+                        
+                        guard let parsedKey = try parseClassElementKey() else {
+                            throw ParserError.invalidSyntax(currentTokenIndex)
+                        }
+                        
+                        if case .leftParen = currentToken()?.tokenType {
+                            return try parseClassMethodDefinition(parsedKey: parsedKey, isStatic: true)
+                        } else {
+                            return try parseClassFieldDefinition(isStatic: true)
+                        } 
+                    }
+            
+            default:
+                guard let parsedKey = try parseClassElementKey() else {
+                    throw ParserError.invalidSyntax(currentTokenIndex)
+                }
+                
+                if case .leftParen = currentToken()?.tokenType {
+                    return try parseClassMethodDefinition(parsedKey: parsedKey, isStatic: false)
+                } else {
+                    return try parseClassFieldDefinition(isStatic: false)
+                }
+        }
+    }
+    func parseClassElementKey() throws -> ClassElementKey?{
+        if case .privateIdentifier(let string) = currentToken()?.tokenType {
+            advance() // consume private identifier
+            return ClassElementKey.privateName(.privateIdentifier(string))
+        } else {
+            guard let key = try parsePropertyKey() else {
+                throw ParserError.invalidSyntax(currentTokenIndex)
+            }
+            return ClassElementKey.publicKey(key)
+        }    
+    }
+    func parseClassConstructorDefinition() throws -> ClassElement? {
+        advance() // consume 'constructor' keyword
+
+        try expect(tokenType: .leftParen) // consume '('
+
+        var params: [Expression] = []
+
+        while currentToken()?.tokenType != .rightParen {
+            if let param = try parseExpression(precedence: 0, allowComma: false) {
+                params.append(param)
+            }
+
+            if case .comma = currentToken()?.tokenType {
+                advance() // consume ','
+                continue
+            }
+        }
+
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let bodyStmt = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return .constructor(
+            params: params,
+            body: bodyStmt
+        )
+    }                                
+    func parseClassGetterDefinition(isStatic: Bool) throws -> ClassElement?{
+        advance() // consume 'get' keyword
+
+        guard let key = try parseClassElementKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let bodyStmt = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return .getter(
+            key: key,
+            body: bodyStmt,
+            isStatic: isStatic
+        )
+
+    }
+    func parseClassSetterDefinition(isStatic: Bool) throws -> ClassElement?{
+        advance() // consume 'set' keyword
+
+        guard let key = try parseClassElementKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+        guard let param = try parseExpression(precedence: 0, allowComma: false) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let bodyStmt = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        
+        return .setter(
+            key: key,
+            param: param,
+            body: bodyStmt,
+            isStatic: isStatic
+        )
+    }
+    func parseClassMethodDefinition(parsedKey: ClassElementKey? = nil, isStatic: Bool) throws -> ClassElement?{
+        var isAsync: Bool = false 
+        var isGenerator: Bool = false
+
+        if case .async = currentToken()?.tokenType {
+            isAsync = true
+            advance() // consume 'async' keyword
+        }
+
+        if case .binaryOp(.multiply) = currentToken()?.tokenType {
+            isGenerator = true
+            advance() // consume '*' operator
+        }
+
+        guard let key = try parseClassElementKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+
+        if case .rightParen = currentToken()?.tokenType {
+            advance() // consume ')'
+            guard let bodyStmt = try parseBlockStatement() else {
+                throw ParserError.invalidSyntax(currentTokenIndex)
+            }
+
+            return .member(
+                key: key,
+                params: [],
+                body: bodyStmt,
+                isStatic: isStatic,
+                isAsync: isAsync,
+                isGenerator: isGenerator
+            )
+        }
+
+        var args: [Expression] = []
+
+        while currentToken()?.tokenType != .rightParen {
+            
+            let arg = try parseExpression(precedence: 0, allowComma: false)
+            args.append(arg!)
+
+            try expect(tokenType: .comma) // consume ','
+        }
+
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let bodyStmt = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return .member(
+            key: key,
+            params: args,
+            body: bodyStmt,
+            isStatic: isStatic,
+            isAsync: isAsync,
+            isGenerator: isGenerator
+        )
+    }                      
+    func parseClassFieldDefinition(isStatic: Bool) throws -> ClassElement?{
+        guard let key = try parseClassElementKey() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        var initializer: Expression? = nil
+
+        if case .binaryOp(let op) = currentToken()?.tokenType, op == .assign {
+            advance() // consume '=' operator
+
+            initializer = try parseExpression(precedence: 0)
+        }
+
+        try consumeSemicolon()
+
+        return .field(
+            key: key,
+            initializer: initializer,
+            isStatic: isStatic
+        )
+    }
+    func parseStaticBlockDefinition() throws -> ClassElement?{
+        advance() // consume 'static' keyword
+        guard let bodyStmt = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return .staticBlock(statement: bodyStmt)
+    }                      
+
 
     func parseArrayLiteral() throws -> Expression? {
         advance() // consume '['
@@ -1337,7 +1649,62 @@ extension Parser : Parsers {
     }
     
     func parseClassDeclaration() throws -> Declaration? {
-        return nil
+        advance() // consume 'class' keyword
+
+        //in case of class declaration, name must be declared
+        guard case .identifier(let class_name) = currentToken()?.tokenType else { 
+            throw ParserError.unexpectedToken(currentTokenIndex)
+        }
+
+        let name = Expression.identifier(class_name)
+
+        advance() // consume class name
+        
+        var maybeSuperClassName: Expression? = nil
+        
+        if case .extends = currentToken()?.tokenType {
+            
+            advance() // consume 'extends' keyword
+
+            if case .identifier(let superClassName) = currentToken()?.tokenType {
+                maybeSuperClassName = Expression.identifier(superClassName)
+                advance() // consume super class name
+            } else {
+                throw ParserError.unexpectedToken(currentTokenIndex)
+            }
+        
+        }
+
+        try expect(tokenType: .leftBrace) // consume '{'
+
+        if case .rightBrace = currentToken()?.tokenType {
+            advance() // consume '}'
+            return .class(
+                name: name,
+                superClass: maybeSuperClassName,
+                body: []
+            )
+        }
+
+        var bodyElements: [ClassElement] = []
+
+        while currentToken()?.tokenType != .rightBrace {
+            
+            if let element = try parseClassElement() {
+                bodyElements.append(element)
+            } 
+
+            try consumeSemicolon()
+
+        }
+
+        try expect(tokenType: .rightBrace) // consume '}'
+
+        return .class(
+            name: name,
+            superClass: maybeSuperClassName,
+            body: bodyElements
+        )
     }
 
     func parseIfStatement() throws -> Statement? {
@@ -1711,14 +2078,33 @@ extension Parser : Parsers {
     }
     func parseBreakStatement() throws -> Statement? {
         advance() // consume 'break' keyword
+        
+        if case .identifier (let name) = currentToken()?.tokenType {
+            let label = Expression.identifier(name)
+            
+            advance()
+            try consumeSemicolon();
+            
+            return .breakStatement(label: label)
+        }
+        
         try consumeSemicolon();
-        return .breakStatement
+        return .breakStatement(label: nil)
     }
 
     func parseContinueStatement() throws -> Statement? {
         advance()
+        if case .identifier (let name) = currentToken()?.tokenType {
+            let label = Expression.identifier(name)
+
+            advance()
+            try consumeSemicolon();
+            
+            return .continueStatement(label: label)
+        }
+        
         try consumeSemicolon();
-        return .continueStatement
+        return .continueStatement(label: nil)
     }
 
     func parseThrowStatement() throws -> Statement? {
@@ -1796,7 +2182,22 @@ extension Parser : Parsers {
         return nil
     }
     func parseLabelledStatement() throws -> Statement? {
-        return nil
+        guard case .identifier (let labelName) = currentToken()?.tokenType else {
+            throw ParserError.unexpectedToken(currentTokenIndex)
+        }
+        let label = Expression.identifier(labelName)
+        
+        advance() // consume label identifier
+        try expect(tokenType: .colon) // consume ':'
+
+        guard let bodyStmt = try parseStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return Statement.labelledStatement(
+            label: label,
+            body: bodyStmt
+        )
     }
     func parseEmptyStatement() throws -> Statement? {
         advance() // consume ';'

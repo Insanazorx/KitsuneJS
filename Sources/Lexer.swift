@@ -7,6 +7,7 @@ public class Lexer {
     public enum LexemeType: CaseIterable, Equatable, CustomStringConvertible {
         case keyword
         case identifier
+        case privateIdentifier
         case number
         case string
         case operatorSymbol
@@ -18,6 +19,7 @@ public class Lexer {
             switch self {
             case .keyword: return "Keyword"
             case .identifier: return "Identifier"
+            case .privateIdentifier: return "PrivateIdentifier"
             case .number: return "Number"
             case .string: return "String"
             case .operatorSymbol: return "Operator"
@@ -49,6 +51,7 @@ public class Lexer {
     }
 
     private static let identifierPattern = #"^[A-Za-z_][A-Za-z0-9_]*"#
+    private static let privateIdentifierPattern = #"^#[A-Za-z_][A-Za-z0-9_]*"#
     private static let numberPattern = #"^\d+"#
     private static let stringPattern = #"^\"(?:[^\"\\]|\\.)*\""#
     private static let punctuationPattern = #"^[\(\)\{\}\[\];,\.]"#
@@ -63,6 +66,8 @@ public class Lexer {
             return #"^(?:"# + keywordAlternation + #")\b"#
         case .identifier:
             return Lexer.identifierPattern
+        case .privateIdentifier:
+            return Lexer.privateIdentifierPattern
         case .number:
             return Lexer.numberPattern
         case .string:
@@ -114,11 +119,11 @@ public class Lexer {
         self.init(
             input: input,
             keywords: [
-                "if", "else", "while", "for", "return", "do", "throw", "try",
+                "if", "else", "while", "for", "return", "do", "throw", "try", "extends",
                 "function", "var", "let", "const", "of", "in", "switch", "export",
                 "class", "enum", "import", "break", "continue", "async", "await",
                 "this", "super", "new", "typeof", "void", "delete", "yield", "catch", 
-                "finally", "default", "null", "true", "false", "undefined"
+                "finally", "default", "null", "true", "false", "undefined", "static"
             ],
             operators: [
                 "==", "!=", "<=", ">=", "&&", "||",
@@ -126,7 +131,8 @@ public class Lexer {
                 "=>", "++", "--", "+=", "-=", "*=", "/=",
                 "...", "?", ":", "!", ".", "&", "|",
                 "^", "%", "~", "===", "!==" , "<<", ">>", ">>>",
-                "<<=", ">>=", ">>>="
+                "<<=", ">>=", ">>>=" , 
+                "&=", "|=", "^=", "%=", "??"
             ]
         )
     }
@@ -180,6 +186,13 @@ public class Lexer {
             tokens.append(Token(lexType: .number, lexeme: n, isPreceededByLineTerminator: lineTerminatorSeen))
             lineTerminatorSeen = false
             advance(by: n.count)
+            continue
+        }
+
+        if let priv = match(.privateIdentifier) {
+            tokens.append(Token(lexType: .privateIdentifier, lexeme: priv, isPreceededByLineTerminator: lineTerminatorSeen))
+            lineTerminatorSeen = false
+            advance(by: priv.count)
             continue
         }
 

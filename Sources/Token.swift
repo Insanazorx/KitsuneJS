@@ -1,5 +1,6 @@
 public enum TokenType : Equatable {
     case identifier(String)
+    case privateIdentifier(String)
     case number(Int)
     case float(Double)
     case string(String)
@@ -11,13 +12,13 @@ public enum TokenType : Equatable {
     case `const`, `continue`, `default`, `do`, `else`, `enum`
     case `eval`, `export`, `extends`, `false`, `finally`, `for`
     case `function`, `if`, `import`, `let`
-    case `new`, `of`, `return`, `super`, `switch`, `this`, `throw`
+    case `new`, `of`, `return`, `super`, `static`, `switch`, `this`, `throw`
     case `true`, `try`, `var`, `while`, `yield`
 
     case binaryOp(BinaryOperation)
     case unaryOp(UnaryOperation)
     case updateOp(UpdateOperation)
-    case arrow, dot
+    case arrow, dot, spread
     case leftParen, rightParen
     case leftBrace, rightBrace
     case leftBracket, rightBracket
@@ -30,6 +31,9 @@ public enum BinaryOperation{
     case logicalAnd, logicalOr, instanceof
     case plus, minus, multiply, divide, assign
     case plusAssign, minusAssign, multiplyAssign, divideAssign
+    case leftShift, rightShift, unsignedRightShift
+    case leftShiftAssign, rightShiftAssign, unsignedRightShiftAssign
+    case nullishCoalescing, andAssign, orAssign, xorAssign, percentAssign
     case caret, percent, ampersand, pipe, `in`
     case strictEqual, strictNotEqual
 }
@@ -57,6 +61,8 @@ public struct Token: CustomStringConvertible, Equatable {
         switch lexType {
         case .identifier:
             return .identifier(lexeme)
+        case .privateIdentifier:
+            return .privateIdentifier(String(lexeme.dropFirst()))
         case .number:
             return .number(Int(lexeme) ?? 0)
         case .string:
@@ -97,6 +103,7 @@ public struct Token: CustomStringConvertible, Equatable {
             case "of": return .of
             case "return": return .return
             case "super": return .super
+            case "static": return .static
             case "switch": return .switch
             case "this": return .this
             case "throw": return .throw
@@ -140,6 +147,18 @@ public struct Token: CustomStringConvertible, Equatable {
             case "===": return .binaryOp(.strictEqual)
             case "!==": return .binaryOp(.strictNotEqual)
             case "!": return .unaryOp(.exclamationMark)
+            case "<<": return .binaryOp(.leftShift)
+            case ">>": return .binaryOp(.rightShift)
+            case ">>>": return .binaryOp(.unsignedRightShift)
+            case "<<=": return .binaryOp(.leftShiftAssign)
+            case ">>=": return .binaryOp(.rightShiftAssign)
+            case ">>>=": return .binaryOp(.unsignedRightShiftAssign)
+            case "??": return .binaryOp(.nullishCoalescing)
+            case "&=": return .binaryOp(.andAssign)
+            case "|=": return .binaryOp(.orAssign)
+            case "^=": return .binaryOp(.xorAssign)
+            case "%=": return .binaryOp(.percentAssign)
+            case "...": return .spread
             // punctuation
             case "(": return .leftParen
             case ")": return .rightParen
@@ -150,8 +169,11 @@ public struct Token: CustomStringConvertible, Equatable {
             case ";": return .semicolon
             case ":": return .colon
             case ",": return .comma
+
+            default:
+                fatalError("Unknown token lexeme: \(lexeme)")
             
-            default: fatalError("Unknown token lexeme: \(lexeme)")
+            //default: fatalError("Unknown token lexeme: \(lexeme)")
         }
     }
     

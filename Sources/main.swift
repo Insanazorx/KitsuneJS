@@ -2,15 +2,37 @@ import Foundation
 
 
 let src = """
-if (true) ({ 
-    g,
-    a: 1, 
-    get [b + "_1"]() { return 2; }, 
-    set [c + "_1"](x) { this._c = x; }, 
-    [d + "_1"]() { return 3; },
-    *[e+"_1"]() {return 4; },
-    async [f + "_1"]() { return 5; }
-    }) 
+
+    class Example {
+
+    get #private() {
+        return this.#privateField;
+    }
+
+    set publicMethod(value) {
+        this.#privateField = value;
+    }
+
+    constructor() {
+        this.#privateField = 0;
+    }
+
+    get [a + "0"]() {
+        return this.publicX;
+    }
+
+    set ["set" + (()=>{return 'r'})()](value) {
+        this.publicX = value;
+
+    async *generatorMethod(a, b) {
+        await someAsyncFunction();
+    }
+
+    async ["" + "method"](x) {
+        await anotherAsyncFunction();
+    }
+}
+   
 """
 
 let src2 = """

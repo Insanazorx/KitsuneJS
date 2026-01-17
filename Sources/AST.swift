@@ -17,6 +17,7 @@ public indirect enum Program {
 public indirect enum Expression {
     case literal(Literal)
     case identifier(String)
+    case privateIdentifier(String)
     case this
 
     case binary(left: Expression, operator_: TokenType, right: Expression)
@@ -44,7 +45,7 @@ public indirect enum Expression {
     case classExpression(
         name: Expression?,
         superClass: Expression?,
-        body: [Declaration]
+        body: [ClassElement]
     )
 
 
@@ -106,8 +107,8 @@ public indirect enum Statement {
     case forAwaitOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
 
     case returnStatement(argument: Expression?)
-    case breakStatement
-    case continueStatement
+    case breakStatement (label: Expression?)
+    case continueStatement (label: Expression?)
 
     case throwStatement(argument: Expression)
 
@@ -120,7 +121,7 @@ public indirect enum Statement {
 
     case switchStatement(discriminant: Expression, cases: [CaseStatement])
 
-    case labelledStatement(label: String, body: Statement)
+    case labelledStatement(label: Expression, body: Statement)
 
     case empty
 }
@@ -143,7 +144,7 @@ public indirect enum Declaration {
     case `class`(
         name: Expression?,
         superClass: Expression?,
-        body: [Declaration]
+        body: [ClassElement]
     )
 
     // let / const
@@ -159,6 +160,39 @@ public indirect enum Declaration {
 public enum LexicalKind {
     case `let`
     case `const`
+}
+
+
+
+public enum ClassElementKey {
+    case publicKey(PropertyKey)    // identifier/literal/computed
+    case privateName(Expression)       // #name  (computed OLAMAZ)
+}
+
+public indirect enum ClassElement {
+    case constructor(params: [Expression?], body: Statement)
+
+    case getter(key: ClassElementKey, body: Statement, isStatic: Bool)
+    case setter(key: ClassElementKey, param: Expression, body: Statement, isStatic: Bool)
+
+    case member(
+        key: ClassElementKey,
+        params: [Expression?],
+        body: Statement,
+        isStatic: Bool,
+        isAsync: Bool,
+        isGenerator: Bool
+    )
+
+    case field(
+        key: ClassElementKey,
+        initializer: Expression?,   // `x` için nil, `x = 1` için expr
+        isStatic: Bool
+    )
+
+    case staticBlock(statement: Statement)
+
+    case empty // `;`
 }
 
 // MARK: - Debug printing (Tree View)
@@ -239,6 +273,8 @@ extension Expression: CustomStringConvertible {
 
     fileprivate func toTreeBox() -> TreeBox {
         switch self {
+        case .privateIdentifier(let name):
+            return box("Expression.privateIdentifier(\(name))")
         case .literal(let lit):
             return box("Expression.literal", [lit.toTreeBox()])
         case .identifier(let name):
@@ -487,11 +523,11 @@ extension Statement: CustomStringConvertible {
         case .returnStatement(let argument):
             return box("Statement.return", [boxOpt("argument", argument?.toTreeBox())])
 
-        case .breakStatement:
-            return box("Statement.break")
+        case .breakStatement(let label):
+            return box("Statement.break", [boxOpt("label", label?.toTreeBox())])
 
-        case .continueStatement:
-            return box("Statement.continue")
+        case .continueStatement(let label):
+            return box("Statement.continue", [boxOpt("label", label?.toTreeBox())])
 
         case .throwStatement(let argument):
             return box("Statement.throw", [box("argument", [argument.toTreeBox()])])
@@ -512,7 +548,7 @@ extension Statement: CustomStringConvertible {
 
         case .labelledStatement(let label, let body):
             return box("Statement.labelled", [
-                box("label: \(label)"),
+                box("label: ", [label.toTreeBox()]),
                 box("body", [body.toTreeBox()])
             ])
 
@@ -584,6 +620,8 @@ extension Declaration: CustomStringConvertible {
     }
 }
 
+
+
 extension LexicalKind: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -591,6 +629,71 @@ extension LexicalKind: CustomStringConvertible {
             return "let"
         case .const:
             return "const"
+        }
+    }
+}
+
+extension ClassElementKey: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .publicKey(let pk):
+            return "publicKey(\(pk))"
+        case .privateName(let expr):
+            return "privateName(\(expr))"
+        }
+    }
+}
+
+extension ClassElement: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .constructor(let params, let body):
+            return box("ClassElement.constructor", [
+                boxOptList("params", params.map { $0?.toTreeBox() }),
+                box("body", [body.toTreeBox()])
+            ])
+
+        case .getter(let key, let body, let isStatic):
+            return box("ClassElement.getter", [
+                box("key", [box(key.description)]),
+                box("body", [body.toTreeBox()]),
+                box("isStatic: \(isStatic)")
+            ])
+
+        case .setter(let key, let param ,let body, let isStatic):
+            return box("ClassElement.setter", [
+                box("key", [box(key.description)]),
+                boxOpt("param", param.toTreeBox()),
+                box("body", [body.toTreeBox()]),
+                box("isStatic: \(isStatic)")
+            ])
+
+        case .member(let key, let params, let body, let isStatic, let isAsync, let isGenerator):
+            return box("ClassElement.member", [
+                box("key", [box(key.description)]),
+                boxOptList("params", params.map { $0?.toTreeBox() }),
+                box("body", [body.toTreeBox()]),
+                box("isStatic: \(isStatic)"),
+                box("isAsync: \(isAsync)"),
+                box("isGenerator: \(isGenerator)")
+            ])
+
+        case .field(let key, let initializer, let isStatic):
+            return box("ClassElement.field", [
+                box("key", [box(key.description)]),
+                boxOpt("initializer", initializer?.toTreeBox()),
+                box("isStatic: \(isStatic)")
+            ])
+
+        case .staticBlock(let statement):
+            return box("ClassElement.staticBlock", [
+                box("statements", [statement.toTreeBox()])
+            ])
+
+        case .empty:
+            return box("ClassElement.empty")
         }
     }
 }
