@@ -1,6 +1,5 @@
 import Foundation
 
-//TODO: this.#privateField crashes
 
 
 let src = """
@@ -100,13 +99,13 @@ console.log(e["a0"], e.this, e.this(), obj.this, obj[sym], side);
 """
 
 let src2 = """
-
+if (true) ++i;
 """
 
 
 
 func main() {
-    let lexer = Lexer(src);
+    let lexer = Lexer(src2);
     let tokens = lexer.tokenize();
     print ("Tokens from grammar file:");
     let parser = Parser(tokens);
@@ -114,6 +113,11 @@ func main() {
     do {
         let ast = try parser.parse();
         print(ast);
+        var idWrapper = IdWrapper();
+        var walker = WalkerImpl(walker: idWrapper);
+        walker.walk(node: ast);
+        walker.printDescription();
+      
     } catch {
         print("Parsing error: \(error)");
     }

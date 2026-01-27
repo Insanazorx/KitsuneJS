@@ -44,7 +44,8 @@ protocol Parsers {
     func parseLexicalDeclaration() throws -> Declaration?                                       // done       
     func parseImportDeclaration() throws -> Declaration?                                          
     func parseExportDeclaration() throws -> Declaration?
-    func parseClassDeclaration() throws -> Declaration? //helpers are declared below near parseClassExpression()
+    func parseClassDeclaration() throws -> Declaration?                                         //done
+    //helpers are declared below near parseClassExpression()
 
     // Statements
 
@@ -68,9 +69,9 @@ protocol Parsers {
     func parseThrowStatement() throws -> Statement?                                             // done --> TODO:  implement lexer to ensure parser gives error for line break after throw
     func parseTryStatement() throws -> Statement?                                               // done     
     func parseSwitchStatement() throws -> Statement?
-    func parseLabelledStatement() throws -> Statement?
+    func parseLabelledStatement() throws -> Statement?                                          // done 
 
-    func parseEmptyStatement() throws -> Statement?
+    func parseEmptyStatement() throws -> Statement?                                             // done
     
     
     // Expressions
@@ -92,19 +93,19 @@ protocol Parsers {
     func parseFunctionExpression(isAsync: Bool) throws -> Expression?
     func parseArrayLiteral() throws -> Expression?                                              // done  
     
-    func parseClassExpression() throws -> Expression?
+    func parseClassExpression() throws -> Expression?                                           // done
 
     //dispatcher for class element parsing
-    func parseClassElement() throws -> ClassElement?
-    func parseClassElementKey() throws -> ClassElementKey?
+    func parseClassElement() throws -> ClassElement?                                            // done    
+    func parseClassElementKey() throws -> ClassElementKey?                                      // done    
     
     //helpers for parseClassElement
-    func parseClassConstructorDefinition() throws -> ClassElement?                                 // done
-    func parseClassGetterDefinition(isStatic: Bool) throws -> ClassElement?
-    func parseClassSetterDefinition(isStatic: Bool) throws -> ClassElement?
-    func parseClassMethodDefinition(parsedKey: ClassElementKey?, isStatic: Bool) throws -> ClassElement?                      
-    func parseClassFieldDefinition(parsedKey: ClassElementKey, isStatic: Bool) throws -> ClassElement?
-    func parseStaticBlockDefinition() throws -> ClassElement?                       // done
+    func parseClassConstructorDefinition() throws -> ClassElement?                              // done
+    func parseClassGetterDefinition(isStatic: Bool) throws -> ClassElement?                     // done
+    func parseClassSetterDefinition(isStatic: Bool) throws -> ClassElement?                     // done
+    func parseClassMethodDefinition(parsedKey: ClassElementKey?, isStatic: Bool) throws -> ClassElement?    // done
+    func parseClassFieldDefinition(parsedKey: ClassElementKey, isStatic: Bool) throws -> ClassElement?      // done 
+    func parseStaticBlockDefinition() throws -> ClassElement?                                   // done
 
     func parseObjectLiteral() throws -> Expression?                                             // done
 
@@ -600,7 +601,13 @@ extension Parser : Parsers {
     
     func parseUnaryExpression() throws -> Expression? {
         
-        guard case .unaryOp (let op) = currentToken()?.tokenType else {
+        var op: TokenType
+
+        if case .unaryOp (let unaryOp) = currentToken()?.tokenType {
+            op = .unaryOp(unaryOp)
+        }else if case .updateOp (let updateOp) = currentToken()?.tokenType {
+            op = .updateOp(updateOp)
+        }else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
         advance() // consume operator
@@ -610,7 +617,7 @@ extension Parser : Parsers {
         }
 
         return Expression.unary(
-            operator_: .unaryOp(op),
+            operator_: op,
             argument: argument,
             isPrefix: true
         )
