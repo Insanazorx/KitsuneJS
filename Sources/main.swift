@@ -113,10 +113,7 @@ func main() {
     do {
         let ast = try parser.parse();
         print(ast);
-        var idWrapper = IdWrapper();
-        var walker = WalkerImpl(walker: idWrapper);
-        walker.walk(node: ast);
-        walker.printDescription();
+      
       
     } catch {
         print("Parsing error: \(error)");

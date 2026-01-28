@@ -27,7 +27,7 @@ struct SemanticAnalyzer {
     public var syntaxTree: ASTNode
     var compilationUnit: CompilationUnit
 
-    var idWrapper: WalkerImpl<IdWrapper>
+    
     var scopeBuilder: WalkerImpl<ScopeBuilder>
     var binder: WalkerImpl<Binder>
     var resolver: WalkerImpl<Resolver>  
@@ -39,14 +39,13 @@ extension SemanticAnalyzer {
         self.syntaxTree = syntaxTree
 
         self.compilationUnit = CompilationUnit(ast: syntaxTree , bindings: [], resolved: [])
-        self.idWrapper = WalkerImpl(walker: IdWrapper())
         self.scopeBuilder = WalkerImpl(walker: ScopeBuilder())
         self.binder = WalkerImpl(walker: Binder())
         self.resolver = WalkerImpl(walker: Resolver())
     }
 
     mutating func analyze(){
-        idWrapper.walk(node: syntaxTree)
+        
         
     }
 

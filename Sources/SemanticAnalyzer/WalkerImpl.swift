@@ -1,23 +1,23 @@
-protocol NodeWalker {
+public protocol NodeWalker {
 
-    mutating func handleProgram(node: Program)
+    mutating func handleProgram(nodeId: Int, node: Program)
 
-    mutating func preStmt(node: Statement) -> Bool
-    mutating func postStmt(node: Statement)
+    mutating func preStmt(nodeId: Int, node: Statement) -> Bool
+    mutating func postStmt(nodeId: Int, node: Statement)
 
-    mutating func preExpr(node: Expression) -> Bool
-    mutating func postExpr(node: Expression)
+    mutating func preExpr(nodeId: Int, node: Expression) -> Bool
+    mutating func postExpr(nodeId: Int, node: Expression)
 
-    mutating func preDecl(node: Declaration) -> Bool
-    mutating func postDecl(node: Declaration)
+    mutating func preDecl(nodeId: Int, node: Declaration) -> Bool
+    mutating func postDecl(nodeId: Int, node: Declaration)
 
-    mutating func preObjProp(node: ObjectProperty) -> Bool
-    mutating func postObjProp(node: ObjectProperty)
+    mutating func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool
+    mutating func postObjProp(nodeId: Int, node: ObjectProperty)
 
-    mutating func preClassElem(node: ClassElement) -> Bool
-    mutating func postClassElem(node: ClassElement) 
+    mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool
+    mutating func postClassElem(nodeId: Int, node: ClassElement) 
 
-    mutating func handlePrimary(node: Expression)
+    mutating func handlePrimary(nodeId: Int, node: Expression)
 
     associatedtype CompilationComponent
     func extract() -> CompilationComponent
@@ -27,13 +27,27 @@ protocol NodeWalker {
     
 }
 
-struct WalkerImpl<Walker: NodeWalker> {
+public struct WalkerImpl<Walker: NodeWalker> {
+
+    public init(walker: Walker) {
+        self.nextNodeId = 0
+        self.walker = walker
+    }
+
     var walker: Walker
+    
+    private var nextNodeId: Int
+    private mutating func allocNodeId() -> Int {
+        let id = nextNodeId
+        nextNodeId += 1
+        return id
+    }
     
     mutating func walk(node: ASTNode){
         switch node {
         case .program (let program):
-            walker.handleProgram(node: program)
+            let pid = allocNodeId()
+            walker.handleProgram(nodeId: pid, node: program)
             switch program {
                 case .program(let body):
                     body.forEach { walkStatement($0) }
@@ -49,8 +63,9 @@ struct WalkerImpl<Walker: NodeWalker> {
     }
 
     mutating func walkStatement(_ stmt: Statement) {
+        let sid = allocNodeId()
 
-        _ = walker.preStmt(node: stmt)
+        _ = walker.preStmt(nodeId: sid, node: stmt)
 
         switch stmt {
             case .block(let blockStmt):
@@ -175,17 +190,18 @@ struct WalkerImpl<Walker: NodeWalker> {
             
         }
 
-        walker.postStmt(node: stmt)
+        walker.postStmt(nodeId: sid, node: stmt)
             
     }
 
     mutating func walkExpression(_ expr: Expression){
+        let eid = allocNodeId()
 
-        _ = walker.preExpr(node: expr)
+        _ = walker.preExpr(nodeId: eid, node: expr)
 
         switch expr {
             case .literal, .identifier, .privateIdentifier, .this :
-                walker.handlePrimary(node: expr)
+                walker.handlePrimary(nodeId: eid, node: expr)
             
             case .binary(let left,  _ , let right):
                 walkExpression(left)
@@ -279,12 +295,13 @@ struct WalkerImpl<Walker: NodeWalker> {
                 properties.forEach { walkObjProp($0) }
         }
 
-        walker.postExpr(node: expr)
+        walker.postExpr(nodeId: eid, node: expr)
     }
 
     mutating func walkDeclaration(_ decl: Declaration){
+        let did = allocNodeId()
 
-        _ = walker.preDecl(node: decl)
+        _ = walker.preDecl(nodeId: did, node: decl)
 
         switch decl {
             case .variable(let declarations, 
@@ -356,7 +373,7 @@ struct WalkerImpl<Walker: NodeWalker> {
 
         }
 
-        walker.postDecl(node: decl)
+        walker.postDecl(nodeId: did, node: decl)
     }
 
     func walkObjProp(_ property: ObjectProperty){
@@ -370,7 +387,7 @@ struct WalkerImpl<Walker: NodeWalker> {
     }
 
     func printDescription(){
-        
+        walker.printDescription()
     }
             
             

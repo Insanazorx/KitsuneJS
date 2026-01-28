@@ -195,50 +195,6 @@ public indirect enum ClassElement {
     case empty // `;`
 }
 
-// MARK: - Debug printing (Tree View)
-
-private struct TreeBox {
-    let label: String
-    var children: [TreeBox] = []
-}
-
-private func renderTree(_ node: TreeBox) -> String {
-    var lines: [String] = [node.label]
-
-    func walk(_ n: TreeBox, _ prefix: String, _ isLast: Bool) {
-        let connector = isLast ? "└─ " : "├─ "
-        lines.append(prefix + connector + n.label)
-
-        let nextPrefix = prefix + (isLast ? "   " : "│  ")
-        for (i, child) in n.children.enumerated() {
-            walk(child, nextPrefix, i == n.children.count - 1)
-        }
-    }
-
-    for (i, child) in node.children.enumerated() {
-        walk(child, "", i == node.children.count - 1)
-    }
-
-    return lines.joined(separator: "\n")
-}
-
-private func box(_ label: String, _ children: [TreeBox] = []) -> TreeBox {
-    TreeBox(label: label, children: children)
-}
-
-private func boxOpt(_ name: String, _ value: TreeBox?) -> TreeBox {
-    box(name, [value ?? box("<nil>")])
-}
-
-private func boxList(_ name: String, _ values: [TreeBox]) -> TreeBox {
-    box(name, values.isEmpty ? [box("<empty>")] : values)
-}
-
-private func boxOptList(_ name: String, _ values: [TreeBox?]) -> TreeBox {
-    let rendered = values.map { $0 ?? box("<nil>") }
-    return boxList(name, rendered)
-}
-
 // Top-level wrapper
 extension ASTNode: CustomStringConvertible {
     public var description: String { renderTree(toTreeBox()) }

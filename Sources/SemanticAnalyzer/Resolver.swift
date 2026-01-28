@@ -1,59 +1,33 @@
 public enum ResolvedRef {}
 
-struct Resolver {
+public struct Resolver {
 
 }
 
 extension Resolver: NodeWalker {
-    func handleProgram(node: Program) {
-        // Implementation goes here
-    }
+    public mutating func handleProgram(nodeId: Int, node: Program) {}
 
-    func preStmt(node: Statement) -> Bool {
-        return true
-    }
-    func postStmt(node: Statement) {
-        // Implementation goes here
-    }
+    public mutating func preStmt(nodeId: Int, node: Statement) -> Bool {return true}
+    public mutating func postStmt(nodeId: Int, node: Statement) {}
 
-    func preExpr(node: Expression) -> Bool {
-        return true
-    }
-    func postExpr(node: Expression) {
-        // Implementation goes here
-    }
+    public mutating func preExpr(nodeId: Int, node: Expression) -> Bool {return true}
+    public mutating func postExpr(nodeId: Int, node: Expression) {}
 
-    func preDecl(node: Declaration) -> Bool {
-        return true
-    }
-    func postDecl(node: Declaration) {
-        // Implementation goes here
-    }
+    public mutating func preDecl(nodeId: Int, node: Declaration) -> Bool { return true}
+    public mutating func postDecl(nodeId: Int, node: Declaration) {}
 
-    func preObjProp(node: ObjectProperty) -> Bool {
-        return true
-    }
-    func postObjProp(node: ObjectProperty) {
-        // Implementation goes here
-    }
+    public mutating func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
+    public mutating func postObjProp(nodeId: Int, node: ObjectProperty) {}
 
-    func preClassElem(node: ClassElement) -> Bool {
-        return true
-    }
-    func postClassElem(node: ClassElement) {
-        // Implementation goes here
-    }
-    func handlePrimary(node: Expression) {
-        // Implementation goes here
-    }
+    public mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
+    public mutating func postClassElem(nodeId: Int, node: ClassElement) {}
 
-    typealias CompilationComponent = [ResolvedRef?]
-    func extract() -> CompilationComponent {
-        return []
-    }
+    public mutating func handlePrimary(nodeId: Int, node: Expression) {}
 
-    func printDescription() {
-      
-    }
+    public typealias CompilationComponent = [ResolvedRef]
+    public func extract() -> CompilationComponent {return []}
+
+    public func printDescription() {}
+
 
 }
