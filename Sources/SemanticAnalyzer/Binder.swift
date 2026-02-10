@@ -1,9 +1,33 @@
-public enum Binding {}
+public enum BindingKind{
+    case global
+    case function
+    case block
+    case `class`
+    case module
+    case `catch`
+    case with
+}
+
+public struct Binding {
+    var kind: BindingKind
+    var name: String
+    var scopeId: Int
+    var homeFunctionScopeId: Int?
+    // StorageType
+    var mutable: Bool
+    var has_tdz: Bool
+    var is_hoisted: Bool
+    var is_global: Bool
+    var is_module: Bool
+    var is_implicit: Bool
+}
 
 public struct Binder {
     
 
 }
+
+    
 
 extension Binder: NodeWalker {
     public mutating func handleProgram(nodeId: Int, node: Program) {}
@@ -24,6 +48,12 @@ extension Binder: NodeWalker {
     public mutating func postClassElem(nodeId: Int, node: ClassElement) {}
 
     public mutating func handlePrimary(nodeId: Int, node: Expression) {}
+    
+    public mutating func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool { return true }
+    public mutating func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool { return true }
+    public mutating func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool { return true }
+    public mutating func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true }
+    public mutating func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool { return true }
 
     public typealias CompilationComponent = [Binding]
     public func extract() -> CompilationComponent {return []}

@@ -15,9 +15,16 @@ public protocol NodeWalker {
     mutating func postObjProp(nodeId: Int, node: ObjectProperty)
 
     mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool
-    mutating func postClassElem(nodeId: Int, node: ClassElement) 
+    mutating func postClassElem(nodeId: Int, node: ClassElement)
 
     mutating func handlePrimary(nodeId: Int, node: Expression)
+    
+    mutating func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool
+    mutating func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool
+    mutating func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool
+    mutating func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool
+    mutating func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool
+
 
     associatedtype CompilationComponent
     func extract() -> CompilationComponent
@@ -162,6 +169,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                let finalizer):
                 walkStatement(block)
 
+
                 catchDeclarations.forEach {
                     if let decl = $0 {
                         walkExpression(decl)
@@ -226,7 +234,8 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 expr.forEach { walkExpression($0) }
             
             case .assignment(let left, _, let right):
-                fatalError("Not implementation yet")
+                walkExpression(left)
+                walkExpression(right)
 
             case .new(let callee, let arguments):
                 walkExpression(callee)

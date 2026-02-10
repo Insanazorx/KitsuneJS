@@ -1,4 +1,27 @@
-public enum ResolvedRef {}
+public enum RefKind {
+    case Read             // x
+    case Write            // x = 5
+    case ReadWrite        // x += 1, x++
+    case Delete           // delete x
+    case Init             // let x = ... (initializer write, TDZ bypass)
+    case ForInOf          // for (x in obj) / for (x of arr)
+    case Typeof           // typeof x
+}
+
+public enum Resolution {
+    case local
+    case global
+    case module
+    case implicitGlobal   // sloppy + LHS assign
+    case dynamic          // with / direct eval barrier
+}
+
+public struct ResolvedRef {
+    var kind: RefKind
+    var depth: Int
+    var binding: Int
+    var isCaptured: Bool
+}
 
 public struct Resolver {
 
@@ -23,6 +46,12 @@ extension Resolver: NodeWalker {
     public mutating func postClassElem(nodeId: Int, node: ClassElement) {}
 
     public mutating func handlePrimary(nodeId: Int, node: Expression) {}
+
+    public mutating func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool { return true }
+    public mutating func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool { return true }
+    public mutating func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool { return true }
+    public mutating func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true }
+    public mutating func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool { return true }
 
     public typealias CompilationComponent = [ResolvedRef]
     public func extract() -> CompilationComponent {return []}

@@ -30,7 +30,7 @@ struct SemanticAnalyzer {
     
     var scopeBuilder: WalkerImpl<ScopeBuilder>
     var binder: WalkerImpl<Binder>
-    var resolver: WalkerImpl<Resolver>  
+    var resolver: WalkerImpl<Resolver>
 }
 
 extension SemanticAnalyzer {

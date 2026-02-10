@@ -99,7 +99,13 @@ console.log(e["a0"], e.this, e.this(), obj.this, obj[sym], side);
 """
 
 let src2 = """
-if (true) ++i;
+try {
+    throw new Error("oops");
+} catch (e) {
+    console.log(e.message);
+} finally {
+    console.log("cleanup");
+}
 """
 
 
@@ -113,6 +119,10 @@ func main() {
     do {
         let ast = try parser.parse();
         print(ast);
+        var scopeBuilder = WalkerImpl(walker: ScopeBuilder());
+        print ("-----------------------------------")
+        scopeBuilder.walk(node: ast)
+        scopeBuilder.printDescription();
       
       
     } catch {
