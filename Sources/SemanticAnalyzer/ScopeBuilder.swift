@@ -26,14 +26,15 @@ public struct Scope {
 public class ScopeBuilder {
     private var scopeStack: [Scope] = []
     private var scopes: [Scope] = []
+    private var funcIdStack: [Int] = []
 }
 
 extension ScopeBuilder {
 
-    func createNewScope(nodeId: Int, kind: ScopeKind) -> Scope {
+    func createNewScope(nodeId: Int, kind: ScopeKind, ownerFunctionId: Int?) -> Scope {
         let newScopeId = scopes.count
         let parentId = scopeStack.last?.id
-        let newScope = Scope(id: newScopeId, nodeId: nodeId, kind: kind, parentId: parentId, childIds: [])
+        let newScope = Scope(id: newScopeId, nodeId: nodeId, kind: kind, ownerFunctionId: ownerFunctionId, parentId: parentId, childIds: [])
         return newScope
     }
 
@@ -57,7 +58,7 @@ extension ScopeBuilder {
    
     private func enterScope(nodeId: Int, kind: ScopeKind) {
         
-        let newScope = createNewScope(nodeId: nodeId, kind: kind)   
+        let newScope = createNewScope(nodeId: nodeId, kind: kind, ownerFunctionId: funcIdStack.last)   
         addChildScope(childId: newScope.id)
 
         scopes.append(newScope)
@@ -66,6 +67,14 @@ extension ScopeBuilder {
  
     private func exitScope() {
         scopeStack.removeLast()
+    }
+
+    private func enterFunction(nodeId: Int) {
+        funcIdStack.append(nodeId)
+    }
+
+    private func exitFunction() {
+        funcIdStack.removeLast()
     }
 
 }
@@ -98,8 +107,10 @@ extension ScopeBuilder: NodeWalker {
 
     public func preExpr(nodeId: Int, node: Expression) -> Bool {
         switch node {
-            case .functionExpression:
+            case .functionExpression, .arrowFunction:
                 enterScope(nodeId: nodeId, kind: .function)
+                enterFunction(nodeId: nodeId)
+
             case .classExpression:
                 enterScope(nodeId: nodeId, kind: .class)
             default:
@@ -109,8 +120,13 @@ extension ScopeBuilder: NodeWalker {
     }
     public func postExpr(nodeId: Int, node: Expression) {
         switch node {
-            case .functionExpression, .classExpression:
+            case .functionExpression, .arrowFunction:
                 exitScope()
+                exitFunction()
+            
+            case .classExpression:
+                exitScope()
+            
             default:
                 break
         }
@@ -119,6 +135,7 @@ extension ScopeBuilder: NodeWalker {
         switch node {
             case .function:
                 enterScope(nodeId: nodeId, kind: .function)
+                enterFunction(nodeId: nodeId)
             case .class:
                 enterScope(nodeId: nodeId, kind: .class)
             default:
@@ -128,18 +145,57 @@ extension ScopeBuilder: NodeWalker {
     }
     public func postDecl(nodeId: Int, node: Declaration) {
         switch node {
-            case .function, .class:
+            case .function:
+                exitScope()
+                exitFunction()
+            case .class:
                 exitScope()
             default:
                 break
         }
     }
 
-    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
-    public func postObjProp(nodeId: Int, node: ObjectProperty) {}
+    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { 
+        switch node {
+            case .method, .getter, .setter:
+                enterScope(nodeId: nodeId, kind: .function)
+                enterFunction(nodeId: nodeId)
+                
+            default:
+                break
+        }
+        return true
+    }
+    public func postObjProp(nodeId: Int, node: ObjectProperty) {
+        switch node {
+            case .method, .getter, .setter:
+                exitScope()
+                exitFunction()
+            default:
+                break
+        }
+    }
 
-    public func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
-    public func postClassElem(nodeId: Int, node: ClassElement) {}
+    public func preClassElem(nodeId: Int, node: ClassElement) -> Bool { 
+        switch node {
+            case .constructor, .member, .getter, .setter:
+                enterScope(nodeId: nodeId, kind: .function)
+                enterFunction(nodeId: nodeId)
+            default:
+                break
+        }
+        
+        return true
+    }
+    public func postClassElem(nodeId: Int, node: ClassElement) {
+        switch node {
+            case .constructor, .member, .getter, .setter:
+                exitScope()
+                exitFunction()
+            default:
+                break
+        }
+    }
 
     public func handlePrimary(nodeId: Int, node: Expression) {}
 

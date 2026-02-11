@@ -707,7 +707,51 @@ extension Parser : Parsers {
     }
 
     func parseFunctionExpression(isAsync: Bool) throws -> Expression? {
-        return nil
+        advance() // consume 'function' keyword
+        
+        var isGenerator = false
+        if case .binaryOp(.multiply) = currentToken()?.tokenType {
+            isGenerator = true
+            advance() // consume '*'
+        }
+
+        var name: Expression? = nil
+
+        if case .identifier(let functionName) = currentToken()?.tokenType {
+            name = Expression.identifier(functionName)
+            advance() // consume function name
+        }
+
+        try expect(tokenType: .leftParen) // consume '('
+
+        var params: [Expression] = []
+
+        while currentToken()?.tokenType != .rightParen {
+            if let param = try parseExpression(precedence: 0, allowComma: false) {
+                params.append(param)
+            }
+
+            if case .comma = currentToken()?.tokenType {
+                advance() // consume ','
+                continue
+            }
+        }
+
+        try expect(tokenType: .rightParen) // consume ')'
+
+        guard let body = try parseBlockStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return Expression.functionExpression(
+            name: name,
+            params: params,
+            body: body,
+            isAsync: isAsync,
+            isGenerator: isGenerator
+        )
+
+
     }
 
     func parseArrowFunction(isAsync: Bool, Args: Expression) throws -> Expression? {
@@ -820,7 +864,7 @@ extension Parser : Parsers {
             case .identifier(let name) where name == "set":
                 return try parseClassSetterDefinition(isStatic: false)
             
-            case .binaryOp(.multiply), .async:
+            case .async, .binaryOp(.multiply):
                 return try parseClassMethodDefinition(isStatic: false)
             
             case .static:
@@ -963,8 +1007,11 @@ extension Parser : Parsers {
             advance() // consume '*' operator
         }
 
-        guard let key = try parseClassElementKey() else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
+        var resultKey: ClassElementKey
+        if let key = parsedKey {
+            resultKey = key
+        } else {
+            resultKey = try parseClassElementKey()!
         }
 
         try expect(tokenType: .leftParen) // consume '('
@@ -976,7 +1023,7 @@ extension Parser : Parsers {
             }
 
             return .member(
-                key: key,
+                key: resultKey,
                 params: [],
                 body: bodyStmt,
                 isStatic: isStatic,
@@ -1006,7 +1053,7 @@ extension Parser : Parsers {
         }
 
         return .member(
-            key: key,
+            key: resultKey,
             params: args,
             body: bodyStmt,
             isStatic: isStatic,

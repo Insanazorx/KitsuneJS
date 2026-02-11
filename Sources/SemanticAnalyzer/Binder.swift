@@ -14,12 +14,12 @@ public struct Binding {
     var scopeId: Int
     var homeFunctionScopeId: Int?
     // StorageType
-    var mutable: Bool
-    var has_tdz: Bool
-    var is_hoisted: Bool
-    var is_global: Bool
-    var is_module: Bool
-    var is_implicit: Bool
+    var mutable: Bool = false 
+    var has_tdz: Bool = false 
+    var is_hoisted: Bool = false 
+    var is_global: Bool = false 
+    var is_module: Bool = false 
+    var is_implicit: Bool = false
 }
 
 public struct Binder {

@@ -346,14 +346,14 @@ public struct WalkerImpl<Walker: NodeWalker> {
         walker.postExpr(nodeId: eid, node: expr)
     }
 
-    mutating func walkDeclaration(_ decl: Declaration){
+    mutating func walkDeclaration(_ decl: Declaration) {
         let did = allocNodeId()
 
         _ = walker.preDecl(nodeId: did, node: decl)
 
         switch decl {
             case .variable(let declarations, 
-                            let assignments):
+                           let assignments):
                 
                 declarations.forEach {
                     if let decl = $0 {

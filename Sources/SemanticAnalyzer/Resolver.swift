@@ -18,6 +18,8 @@ public enum Resolution {
 
 public struct ResolvedRef {
     var kind: RefKind
+    var resolution: Resolution
+    var name: String
     var depth: Int
     var binding: Int
     var isCaptured: Bool

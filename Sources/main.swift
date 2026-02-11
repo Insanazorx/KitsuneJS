@@ -95,24 +95,33 @@ const obj = {
 
 console.log(e["a0"], e.this, e.this(), obj.this, obj[sym], side);
 }
-   
+
+//-------------------------------------------------------------
+
+  let func = function() {
+  function test(c,d) {
+    let x = 1;
+    if (true) {
+      let x = ((a,b) => {
+        function a(){return 1};
+        return 2;
+      })(x,this);
+      console.log(x);
+    }
+    console.log((()=>{
+        x = 2;
+        return x;
+      })(a,c)
+    );
+  }
+}
 """
 
 let src2 = """
-class Foo {
-    constructor() {
-        this.x = 1;
-    }
-    a() {}
-    get b() { return this.x; }
-    set b(v) { this.x = v; }
-    ["c" + "d"](a,b,c) {return a + b + c;}
-    static e() { return this.x; }
-    static ["f" + "g"](z,t) { return this.y; }
-    static {
-        this.h = 2;
-    }
+function foo(a,b) {
+  return a + b
 }
+
 """
 
 
@@ -124,12 +133,12 @@ func main() {
     let parser = Parser(tokens);
     print ("----------------------------------");
     do {
-        let ast = try parser.parse();
-        print(ast);
-        var scopeBuilder = WalkerImpl(walker: ScopeBuilder());
-        print ("-----------------------------------")
-        scopeBuilder.walk(node: ast)
-        scopeBuilder.printDescription();
+      let ast = try parser.parse();
+      print(ast);
+      var scopeBuilder = WalkerImpl(walker: ScopeBuilder());
+      print ("-----------------------------------")
+      scopeBuilder.walk(node: ast)
+      scopeBuilder.printDescription();
       
       
     } catch {
