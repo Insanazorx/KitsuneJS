@@ -99,12 +99,19 @@ console.log(e["a0"], e.this, e.this(), obj.this, obj[sym], side);
 """
 
 let src2 = """
-try {
-    throw new Error("oops");
-} catch (e) {
-    console.log(e.message);
-} finally {
-    console.log("cleanup");
+class Foo {
+    constructor() {
+        this.x = 1;
+    }
+    a() {}
+    get b() { return this.x; }
+    set b(v) { this.x = v; }
+    ["c" + "d"](a,b,c) {return a + b + c;}
+    static e() { return this.x; }
+    static ["f" + "g"](z,t) { return this.y; }
+    static {
+        this.h = 2;
+    }
 }
 """
 

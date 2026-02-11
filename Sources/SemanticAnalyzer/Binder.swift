@@ -49,11 +49,9 @@ extension Binder: NodeWalker {
 
     public mutating func handlePrimary(nodeId: Int, node: Expression) {}
     
-    public mutating func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool { return true }
-    public mutating func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool { return true }
-    public mutating func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool { return true }
-    public mutating func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true }
-    public mutating func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool { return true }
+    public mutating func specializedScopeBuilderVisit(nodeId: Int, 
+                                                      phase: PreOrPost = .none,
+                                                      mode: CatchOrParam) -> Bool { return true }
 
     public typealias CompilationComponent = [Binding]
     public func extract() -> CompilationComponent {return []}

@@ -1,3 +1,9 @@
+public enum PreOrPost {
+    case none
+    case pre
+    case post
+}
+
 public protocol NodeWalker {
 
     mutating func handleProgram(nodeId: Int, node: Program)
@@ -19,12 +25,9 @@ public protocol NodeWalker {
 
     mutating func handlePrimary(nodeId: Int, node: Expression)
     
-    mutating func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool
-    mutating func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool
-    mutating func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool
-    mutating func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool
-    mutating func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool
-
+    mutating func specializedScopeBuilderVisit(nodeId: Int, 
+                                               phase: PreOrPost,
+                                               mode: CatchOrParam) -> Bool
 
     associatedtype CompilationComponent
     func extract() -> CompilationComponent
@@ -167,8 +170,14 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                let catchDeclarations,
                                let handler, 
                                let finalizer):
+                
                 walkStatement(block)
 
+                _ = walker.specializedScopeBuilderVisit( // for catch clause processing
+                        nodeId: sid, 
+                        phase: .pre,
+                        mode: .catch
+                    )
 
                 catchDeclarations.forEach {
                     if let decl = $0 {
@@ -179,6 +188,12 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 if let handler = handler {
                     walkStatement(handler)
                 }
+
+                _ = walker.specializedScopeBuilderVisit( // for catch clause processing
+                        nodeId: sid, 
+                        phase: .post,
+                        mode: .catch
+                    )
 
                 if let finalizer = finalizer {
                     walkStatement(finalizer)
@@ -264,10 +279,22 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 if let name = name {
                     walkExpression(name)
                 }
+
+                _ = walker.specializedScopeBuilderVisit( // for function expression param scope processing
+                        nodeId: eid, 
+                        phase: .pre,
+                        mode: .param
+                    )
                 
                 params.forEach { if let param = $0 {
                     walkExpression(param)
                 } }
+
+                _ = walker.specializedScopeBuilderVisit( // for function expression param scope processing
+                        nodeId: eid, 
+                        phase: .post,
+                        mode: .param
+                    )
 
                 walkStatement(body)
 
@@ -289,9 +316,21 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                 let body,
                                 _):
                 
+                _ = walker.specializedScopeBuilderVisit( // for arrow function param scope processing
+                        nodeId: eid, 
+                        phase: .pre,
+                        mode: .param
+                    )
+
                 params.forEach { if let param = $0 {
                     walkExpression(param)
                 } }
+
+                _ = walker.specializedScopeBuilderVisit( // for arrow function param scope processing
+                        nodeId: eid, 
+                        phase: .post,
+                        mode: .param
+                    )
 
                 walkStatement(body)
 
@@ -349,10 +388,22 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 if let name = name {
                     walkExpression(name)
                 }
+
+                _ = walker.specializedScopeBuilderVisit( // for function declaration processing
+                        nodeId: did, 
+                        phase: .pre,
+                        mode: .param
+                    )
                 
                 params.forEach { if let param = $0 {
                     walkExpression(param)
                 } }
+
+                _ = walker.specializedScopeBuilderVisit( // for function declaration processing
+                        nodeId: did, 
+                        phase: .post,
+                        mode: .param
+                    )
 
                 walkStatement(body)
 
@@ -385,15 +436,179 @@ public struct WalkerImpl<Walker: NodeWalker> {
         walker.postDecl(nodeId: did, node: decl)
     }
 
-    func walkObjProp(_ property: ObjectProperty){
+    mutating func walkObjProp(_ property: ObjectProperty){
+        let opid = allocNodeId()
+        
+        _ = walker.preObjProp(nodeId: opid, node: property)
+        
+        switch property {
+            case .property(key: let key, value: let value):
+                walkPropKey(key)
+                walkExpression(value)
+            case .method(let key, let params, let body,
+                        _,_):
+                walkPropKey(key)
+            
+                _ = walker.specializedScopeBuilderVisit( // for method property param scope processing
+                        nodeId: opid, 
+                        phase: .pre,
+                        mode: .param
+                    )
+
+                params.forEach { if let param = $0 {
+                    walkExpression(param)
+                } }
+
+                _ = walker.specializedScopeBuilderVisit( // for method property param scope processing
+                        nodeId: opid, 
+                        phase: .post,
+                        mode: .param
+                    )
+
+                walkStatement(body)
+            case .shorthand(let key):
+                walkPropKey(key)
+
+            case .spread(let arg):
+                walkExpression(arg)
+
+            case .getter(let key, let body):
+                walkPropKey(key)
+                walkStatement(body)
+
+            case .setter(let key, let param, let body):
+                walkPropKey(key)
+                
+                _ = walker.specializedScopeBuilderVisit( // for setter property processing
+                        nodeId: opid, 
+                        phase: .pre,
+                        mode: .param
+                    )
+
+                walkExpression(param)
+
+                _ = walker.specializedScopeBuilderVisit( // for setter property processing
+                        nodeId: opid, 
+                        phase: .post,
+                        mode: .param
+                    )
+                
+                walkStatement(body)
+
+        }
+        walker.postObjProp(nodeId: opid, node: property)
     }
     
-    func walkClassElem(_ element: ClassElement){
+    mutating func walkClassElem(_ element: ClassElement){
+        let ceid = allocNodeId()
+        
+        _ = walker.preClassElem(nodeId: ceid, node: element)
+
+        switch element {
+            case .constructor(let params, let body):
+                _ = walker.specializedScopeBuilderVisit( 
+                        nodeId: ceid, 
+                        phase: .pre,
+                        mode: .param
+                    )
+
+                params.forEach { if let param = $0 {
+                    walkExpression(param)
+                } }
+
+                _ = walker.specializedScopeBuilderVisit( 
+                        nodeId: ceid, 
+                        phase: .post,
+                        mode: .param
+                    )
+
+                walkStatement(body)
+            case .member(let key, let params, let body,
+                         _,_,_):
+                walkClassElemKey(key)
+
+                let compactParams = params.compactMap { $0 }
+                if !compactParams.isEmpty {
+                    _ = walker.specializedScopeBuilderVisit( 
+                            nodeId: ceid, 
+                            phase: .pre,
+                            mode: .param
+                        )
+
+                    compactParams.forEach { walkExpression($0) }
+
+                    _ = walker.specializedScopeBuilderVisit( 
+                            nodeId: ceid, 
+                            phase: .post,
+                            mode: .param
+                        )
+                }
+
+                walkStatement(body)
+
+            case .field(let key, let value,_):
+                walkClassElemKey(key)
+                if let value = value {
+                    walkExpression(value)
+                }
+            
+            case .getter(let key, let body, _):
+                walkClassElemKey(key)
+                walkStatement(body)
+            
+            case .setter (let key, let param, let body, _):
+                walkClassElemKey(key)
+                _ = walker.specializedScopeBuilderVisit( 
+                        nodeId: ceid, 
+                        phase: .pre,
+                        mode: .param
+                    )
+                walkExpression(param)
+                _ = walker.specializedScopeBuilderVisit( 
+                        nodeId: ceid, 
+                        phase: .post,
+                        mode: .param
+                    )
+                walkStatement(body)
+
+            case .staticBlock(let body):
+                walkStatement(body)
+            
+            case .empty:
+                break
+
+        }
+
+        walker.postClassElem(nodeId: ceid, node: element) 
     }
 
-    func walkCaseStmt(_ caseStmt: CaseStatement){
+    mutating func walkCaseStmt(_ caseStmt: CaseStatement){
 
     }
+
+    mutating func walkClassElemKey (_ key: ClassElementKey) {
+        switch key {
+        case .privateName(let name):
+            walkExpression(name)
+        case .publicKey(let key):
+            walkPropKey(key)
+        }
+    }
+
+
+    mutating func walkPropKey(_ key: PropertyKey) {
+        switch key {
+        case .identifier:
+            break
+        case .literal:
+            break
+        case .computed(let value):
+            walkExpression(value)
+        }
+
+    }
+
+
 
     func printDescription(){
         walker.printDescription()

@@ -9,6 +9,11 @@ public enum ScopeKind {
     case with
 }
 
+public enum CatchOrParam {
+    case `catch`
+    case param
+}
+
 public struct Scope {
     var id: Int
     var nodeId: Int
@@ -138,11 +143,24 @@ extension ScopeBuilder: NodeWalker {
 
     public func handlePrimary(nodeId: Int, node: Expression) {}
 
-    public func specializedVisitForStmt(nodeId: Int, node: Statement) -> Bool { return true }
-    public func specializedVisitForExpr(nodeId: Int, node: Expression) -> Bool { return true }
-    public func specializedVisitForDecl(nodeId: Int, node: Declaration) -> Bool { return true }
-    public func specializedVisitForObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true }
-    public func specializedVisitForClassElem(nodeId: Int, node: ClassElement) -> Bool { return true }
+
+    public func specializedScopeBuilderVisit(nodeId: Int, 
+                                             phase: PreOrPost = .none,
+                                             mode: CatchOrParam) -> Bool {
+        switch (phase, mode) {
+        case (.pre, .catch):
+            enterScope(nodeId: nodeId, kind: .catch)
+        case (.post, .catch):
+            exitScope()
+        case (.pre, .param):
+            enterScope(nodeId: nodeId, kind: .param)
+        case (.post, .param):
+            exitScope()
+        default: 
+            break
+        }   
+        return true 
+    }
 
     public typealias CompilationComponent = [Scope]
     public func extract() -> CompilationComponent {return scopes}
