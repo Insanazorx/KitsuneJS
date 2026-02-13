@@ -118,8 +118,13 @@ console.log(e["a0"], e.this, e.this(), obj.this, obj[sym], side);
 """
 
 let src2 = """
-function foo(a,b) {
-  return a + b
+let a = class foo {
+  constructor(x) {
+    this.x = x;
+  }
+  x() {
+    return this.x;
+  }
 }
 
 """

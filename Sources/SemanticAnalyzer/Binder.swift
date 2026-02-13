@@ -12,7 +12,10 @@ public struct Binding {
     var kind: BindingKind
     var name: String
     var scopeId: Int
+    var declNodeId: Int
+    var declOrder: Int
     var homeFunctionScopeId: Int?
+
     // StorageType
     var mutable: Bool = false 
     var has_tdz: Bool = false 
@@ -22,36 +25,38 @@ public struct Binding {
     var is_implicit: Bool = false
 }
 
-public struct Binder {
+public class Binder {
     
-
 }
 
     
 
 extension Binder: NodeWalker {
-    public mutating func handleProgram(nodeId: Int, node: Program) {}
+    public func handleProgram(nodeId: Int, node: Program) {}
 
-    public mutating func preStmt(nodeId: Int, node: Statement) -> Bool {return true}
-    public mutating func postStmt(nodeId: Int, node: Statement) {}
+    public func preStmt(nodeId: Int, node: Statement) -> Bool {return true}
+    public func postStmt(nodeId: Int, node: Statement) {}
 
-    public mutating func preExpr(nodeId: Int, node: Expression) -> Bool {return true}
-    public mutating func postExpr(nodeId: Int, node: Expression) {}
+    public func preExpr(nodeId: Int, node: Expression) -> Bool {
+        
+        return true
+    }
+    public func postExpr(nodeId: Int, node: Expression) {}
 
-    public mutating func preDecl(nodeId: Int, node: Declaration) -> Bool { return true}
-    public mutating func postDecl(nodeId: Int, node: Declaration) {}
+    public func preDecl(nodeId: Int, node: Declaration) -> Bool { return true}
+    public func postDecl(nodeId: Int, node: Declaration) {}
 
-    public mutating func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
-    public mutating func postObjProp(nodeId: Int, node: ObjectProperty) {}
+    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
+    public func postObjProp(nodeId: Int, node: ObjectProperty) {}
  
-    public mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
-    public mutating func postClassElem(nodeId: Int, node: ClassElement) {}
+    public func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
+    public func postClassElem(nodeId: Int, node: ClassElement) {}
 
-    public mutating func handlePrimary(nodeId: Int, node: Expression) {}
+    public func handlePrimary(nodeId: Int, node: Expression) {}
     
-    public mutating func specializedScopeBuilderVisit(nodeId: Int, 
-                                                      phase: PreOrPost = .none,
-                                                      mode: CatchOrParam) -> Bool { return true }
+    public func specializedScopeBuilderVisit(nodeId: Int, 
+                                             phase: PreOrPost = .none,
+                                             mode: CatchOrParam) -> Bool { return true }
 
     public typealias CompilationComponent = [Binding]
     public func extract() -> CompilationComponent {return []}

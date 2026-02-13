@@ -5,6 +5,7 @@ public indirect enum ASTNode {
     case expression(Expression)
     case statement(Statement)
     case declaration(Declaration)
+    case pattern(Pattern)
     case program(Program)
 }
 
@@ -12,6 +13,21 @@ public indirect enum ASTNode {
 public indirect enum Program {
     case program(body: [Statement])
 }
+
+public indirect enum Pattern {
+    case bindingIdentifier(String)
+    case object(properties: [ObjectPatternProperty])
+    case array(elements: [Pattern?])           // elision için nil
+    case rest(Pattern)                         // ...x
+    case assignment(left: Pattern, defaultValue: Expression)  // x = expr
+}
+
+public enum ObjectPatternProperty {
+    case property(key: PropertyKey, value: Pattern)  // {a: x}
+    case shorthand(String)                             // {a}
+    case rest(Pattern)                                 // {...rest}
+}
+
 
 // Expressions
 public indirect enum Expression {
@@ -36,7 +52,7 @@ public indirect enum Expression {
     case arrayLiteral(elements: [Expression])
     case functionExpression(
         name: Expression?,
-        params: [Expression?],
+        params: [Pattern]?,
         body: Statement,
         isAsync: Bool,
         isGenerator: Bool
@@ -49,7 +65,7 @@ public indirect enum Expression {
     )
 
 
-    case arrowFunction(params: [Expression?], body: Statement, isAsync: Bool)
+    case arrowFunction(params: [Pattern]?, body: Statement, isAsync: Bool)
 
     case parenthesized(Expression?)
     case objectLiteral(properties: [ObjectProperty])
@@ -59,9 +75,9 @@ public indirect enum Expression {
     public enum ObjectProperty {
         case property(key: PropertyKey, value: Expression)     // a: expr
         case shorthand(PropertyKey)                            // {a}
-        case method(key: PropertyKey, args: [Expression?], body: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
+        case method(key: PropertyKey, args: [Pattern]?, body: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
         case getter(key: PropertyKey, body: Statement)      // {get x(){}}
-        case setter(key: PropertyKey, arg: Expression, body: Statement)      // {set x(v){}}
+        case setter(key: PropertyKey, arg: Pattern, body: Statement)      // {set x(v){}}
         case spread(argument: Expression)                       // {...obj}
     }
 
@@ -95,16 +111,15 @@ public indirect enum Statement {
     case doWhileStatement(body: Statement, test: Expression)
 
     case forStatement(
-        initDecl: Declaration?,
-        initExpr: Expression?,
+        init: ForInit,
         test: Expression?,
         update: Expression?,
         body: Statement
     )
 
-    case forInStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
-    case forOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
-    case forAwaitOfStatement(left: Declaration?, leftExpr: Expression?, right: Expression, body: Statement)
+    case forInStatement(left: ForEachLeft, right: Expression, body: Statement)
+    case forOfStatement(left: ForEachLeft, right: Expression, body: Statement)
+    case forAwaitOfStatement(left: ForEachLeft, right: Expression, body: Statement)
 
     case returnStatement(argument: Expression?)
     case breakStatement (label: Expression?)
@@ -114,7 +129,7 @@ public indirect enum Statement {
 
     case tryStatement(
         block: Statement,
-        catchDeclarations: [Expression?],
+        catchDeclarations: [Pattern]?,
         handler: Statement?,
         finalizer: Statement?
     )
@@ -126,6 +141,16 @@ public indirect enum Statement {
     case empty
 }
 
+public enum ForInit {
+    case declaration(Declaration)   // var/let/const ...
+    case expression(Expression)     // i = 0, foo(), ...
+}
+
+public enum ForEachLeft {
+    case declaration(Declaration) // var/let/const + TEK declarator (init yasak)
+    case pattern(Pattern)         // destructuring / assignment target gibi
+}
+
 // Case statements for switch
 public indirect enum CaseStatement {
     case `case`(test: Expression?, consequent: [Statement])
@@ -135,7 +160,7 @@ public indirect enum CaseStatement {
 public indirect enum Declaration {
     case function(
         name: Expression?,
-        params: [Expression?],
+        params: [Pattern]?,
         body: Statement, // typically .block
         isAsync: Bool,
         isGenerator: Bool
@@ -148,10 +173,10 @@ public indirect enum Declaration {
     )
 
     // let / const
-    case lexical(kind: LexicalKind, declarations: [Expression?], assignments: [Expression]?)
+    case lexical(kind: LexicalKind, declarators: [VariableDeclarator])
 
     // var
-    case variable(declarations: [Expression?], assignments: [Expression]?)
+    case variable(declarators: [VariableDeclarator])
 
     case importDecl(module: Expression, specifiers: [Expression])
     case exportDecl(specifiers: [Expression], source: Expression?)
@@ -162,6 +187,11 @@ public enum LexicalKind {
     case `const`
 }
 
+public struct VariableDeclarator {
+    public let id: Pattern
+    public let init_: Expression?   // nil => `let c;`
+}
+
 
 
 public enum ClassElementKey {
@@ -170,14 +200,14 @@ public enum ClassElementKey {
 }
 
 public indirect enum ClassElement {
-    case constructor(params: [Expression?], body: Statement)
+    case constructor(params: [Pattern]?, body: Statement)
 
     case getter(key: ClassElementKey, body: Statement, isStatic: Bool)
-    case setter(key: ClassElementKey, param: Expression, body: Statement, isStatic: Bool)
+    case setter(key: ClassElementKey, param: Pattern, body: Statement, isStatic: Bool)
 
     case member(
         key: ClassElementKey,
-        params: [Expression?],
+        params: [Pattern]?,
         body: Statement,
         isStatic: Bool,
         isAsync: Bool,
@@ -207,8 +237,48 @@ extension ASTNode: CustomStringConvertible {
             return box("ASTNode.statement", [stmt.toTreeBox()])
         case .declaration(let decl):
             return box("ASTNode.declaration", [decl.toTreeBox()])
+        case .pattern(let pattern):
+            return box("ASTNode.pattern", [pattern.toTreeBox()])
         case .program(let prog):
             return box("ASTNode.program", [prog.toTreeBox()])
+        }
+    }
+}
+
+extension Pattern: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .bindingIdentifier(let name):
+            return box("Pattern.bindingIdentifier(\(name))")
+        case .object(let properties):
+            return box("Pattern.object", [boxList("properties", properties.map { $0.toTreeBox() })])
+        case .array(let elements):
+            return box("Pattern.array", [boxOptList("elements", elements.map { $0?.toTreeBox() })])
+        case .rest(let pattern):
+            return box("Pattern.rest", [pattern.toTreeBox()])
+        case .assignment(let left, let defaultValue):
+            return box("Pattern.assignment", [
+                box("left", [left.toTreeBox()]),
+                box("defaultValue", [defaultValue.toTreeBox()])
+            ])
+        }
+    }
+}
+
+private extension ObjectPatternProperty {
+    func toTreeBox() -> TreeBox {
+        switch self {
+        case .property(let key, let value):
+            return box("ObjectPatternProperty.property", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()])
+            ])
+        case .shorthand(let name):
+            return box("ObjectPatternProperty.shorthand(\(name))")
+        case .rest(let pattern):
+            return box("ObjectPatternProperty.rest", [pattern.toTreeBox()])
         }
     }
 }
@@ -303,7 +373,7 @@ extension Expression: CustomStringConvertible {
         case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
             return box("Expression.functionExpression", [
                 boxOpt("name", name?.toTreeBox()),
-                boxOptList("params", params.map { $0?.toTreeBox() }),
+                boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
                 box("body", [body.toTreeBox()])
@@ -318,7 +388,7 @@ extension Expression: CustomStringConvertible {
 
         case .arrowFunction(let params, let body, let isAsync):
             return box("Expression.arrowFunction", [
-                boxOptList("params", params.map { $0?.toTreeBox() }),
+                boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("body", [body.toTreeBox()]),
                 box("async: \(isAsync)")
             ])
@@ -331,6 +401,8 @@ extension Expression: CustomStringConvertible {
         }
     }
 }
+
+
 
 // MARK: - Object literal Tree View
 
@@ -362,7 +434,7 @@ private extension ObjectProperty {
         case .method(let key, let args, let body, let isAsync, let isGenerator):
             return box("ObjectProperty.method", [
                 box("key", [key.toTreeBox()]),
-                boxOptList("args", args.map { $0?.toTreeBox() }),
+                boxListOpt("args", args?.map { $0.toTreeBox() }),
                 box("body", [body.toTreeBox()]),
                 box( "isAsync: \(isAsync)"),
                 box( "isGenerator: \(isGenerator)")
@@ -443,35 +515,31 @@ extension Statement: CustomStringConvertible {
                 box("test", [test.toTreeBox()])
             ])
 
-        case .forStatement(let initDecl, let initExpr, let test, let update, let body):
+        case .forStatement(let `init`, let test, let update, let body):
             return box("Statement.for", [
-                boxOpt("initDecl", initDecl?.toTreeBox()),
-                boxOpt("initExpr", initExpr?.toTreeBox()),
+                boxOpt("init", `init`.toTreeBox()),
                 boxOpt("test", test?.toTreeBox()),
                 boxOpt("update", update?.toTreeBox()),
                 box("body", [body.toTreeBox()])
             ])
 
-        case .forInStatement(let left, let leftExpr, let right, let body):
+        case .forInStatement(let left, let right, let body):
             return box("Statement.forIn", [
-                boxOpt("leftDecl", left?.toTreeBox()),
-                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                boxOpt("left", left.toTreeBox()),
                 box("right", [right.toTreeBox()]),
                 box("body", [body.toTreeBox()])
             ])
 
-        case .forOfStatement(let left, let leftExpr, let right, let body):
+        case .forOfStatement(let left, let right, let body):
             return box("Statement.forOf", [
-                boxOpt("leftDecl", left?.toTreeBox()),
-                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                boxOpt("left", left.toTreeBox()),
                 box("right", [right.toTreeBox()]),
                 box("body", [body.toTreeBox()])
             ])
 
-        case .forAwaitOfStatement(let left, let leftExpr, let right, let body):
+        case .forAwaitOfStatement(let left, let right, let body):
             return box("Statement.forAwaitOf", [
-                boxOpt("leftDecl", left?.toTreeBox()),
-                boxOpt("leftExpr", leftExpr?.toTreeBox()),
+                boxOpt("left", left.toTreeBox()),
                 box("right", [right.toTreeBox()]),
                 box("body", [body.toTreeBox()])
             ])
@@ -491,7 +559,7 @@ extension Statement: CustomStringConvertible {
         case .tryStatement(let block, let catchDeclarations, let handler, let finalizer):
             return box("Statement.try", [
                 box("block", [block.toTreeBox()]),
-                boxOptList("catchDeclarations", catchDeclarations.map { $0?.toTreeBox() }),
+                boxListOpt("catchDeclarations", catchDeclarations?.map { $0.toTreeBox() }),
                 boxOpt("handler", handler?.toTreeBox()),
                 boxOpt("finalizer", finalizer?.toTreeBox())
             ])
@@ -510,6 +578,32 @@ extension Statement: CustomStringConvertible {
 
         case .empty:
             return box("Statement.empty")
+        }
+    }
+}
+
+extension ForInit: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .declaration(let decl):
+            return box("ForInit.declaration", [decl.toTreeBox()])
+        case .expression(let expr):
+            return box("ForInit.expression", [expr.toTreeBox()])
+        }
+    }
+}
+
+extension ForEachLeft: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .declaration(let decl):
+            return box("ForEachLeft.declaration", [decl.toTreeBox()])
+        case .pattern(let pattern):
+            return box("ForEachLeft.pattern", [pattern.toTreeBox()])
         }
     }
 }
@@ -536,7 +630,7 @@ extension Declaration: CustomStringConvertible {
         case .function(let name, let params, let body, let isAsync, let isGenerator):
             return box("Declaration.function", [
                 boxOpt("name", name?.toTreeBox()),
-                boxOptList("params", params.map { $0?.toTreeBox() }),
+                boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
                 box("body", [body.toTreeBox()])
@@ -549,16 +643,14 @@ extension Declaration: CustomStringConvertible {
                 boxList("body", body.map { $0.toTreeBox() })
             ])
 
-        case .lexical(let kind, let declarations, let assignments):
+        case .lexical(let kind, let declarators):
             return box("Declaration.lexical(\(kind))", [
-                boxOptList("declarations", declarations.map { $0?.toTreeBox() }),
-                boxList("assignments", (assignments ?? []).map { $0.toTreeBox() })
+                boxListOpt("declarators", declarators.map { $0.toTreeBox() })
             ])
 
-        case .variable(let declarations, let assignments):
+        case .variable(let declarators):
             return box("Declaration.variable", [
-                boxOptList("declarations", declarations.map { $0?.toTreeBox() }),
-                boxList("assignments", (assignments ?? []).map { $0.toTreeBox() })
+                boxListOpt("declarators", declarators.map { $0.toTreeBox() })
             ])
 
         case .importDecl(let module, let specifiers):
@@ -586,6 +678,19 @@ extension LexicalKind: CustomStringConvertible {
         case .const:
             return "const"
         }
+    }
+}
+
+extension VariableDeclarator: CustomStringConvertible {
+    public var description: String {
+        return renderTree(toTreeBox())
+    }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        return box("VariableDeclarator", [
+            box("id", [id.toTreeBox()]),
+            boxOpt("init", init_?.toTreeBox())
+        ])
     }
 }
 
@@ -617,7 +722,7 @@ extension ClassElement: CustomStringConvertible {
         switch self {
         case .constructor(let params, let body):
             return box("ClassElement.constructor", [
-                boxOptList("params", params.map { $0?.toTreeBox() }),
+                boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("body", [body.toTreeBox()])
             ])
 
@@ -639,7 +744,7 @@ extension ClassElement: CustomStringConvertible {
         case .member(let key, let params, let body, let isStatic, let isAsync, let isGenerator):
             return box("ClassElement.member", [
                 box("key", [key.toTreeBox()]),
-                boxOptList("params", params.map { $0?.toTreeBox() }),
+                boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("body", [body.toTreeBox()]),
                 box("isStatic: \(isStatic)"),
                 box("isAsync: \(isAsync)"),

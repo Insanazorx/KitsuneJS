@@ -21,6 +21,9 @@ public struct Scope {
     var ownerFunctionId: Int?
     var parentId: Int?
     var childIds: [Int]
+
+    var bindings: [Binding] = []
+    var refs: [ResolvedRef] = []
 }
 
 public class ScopeBuilder {
@@ -51,7 +54,7 @@ extension ScopeBuilder {
     }
 
     private func enterGlobalScope(nodeId: Int) {
-        let globalScope = Scope(id: 0, nodeId: nodeId, kind: .global, parentId: nil, childIds: [])
+        let globalScope = Scope(id: 0, nodeId: nodeId, kind: .global, ownerFunctionId: nil, parentId: nil, childIds: [])
         scopes.append(globalScope)
         scopeStack.append(globalScope)
     }

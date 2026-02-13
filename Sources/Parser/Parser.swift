@@ -36,12 +36,23 @@ public enum ParserError: Error {
 
 protocol Parsers {
     
+    // Patterns
+    func parsePattern() throws -> Pattern?
+    func parseAssignmentPattern() throws -> Pattern?
+    func parseObjectPattern() throws -> Pattern?
+    func parseArrayPattern() throws -> Pattern?
+    func parseRestPattern() throws -> Pattern?
+
+    func parseVariableDeclarator(isInitAllowed: Bool) throws -> VariableDeclarator?
+
+
+
     // Declarations
     
     func parseDeclarationStatement(isAsync: Bool) throws -> Statement?                          // done
     func parseFunctionDeclaration(isAsync: Bool) throws -> Declaration?                         // done 
-    func parseVariableDeclaration() throws -> Declaration?                                      // done
-    func parseLexicalDeclaration() throws -> Declaration?                                       // done       
+    func parseVariableDeclaration(isInitAllowed: Bool) throws -> Declaration?                                      // done
+    func parseLexicalDeclaration(isInitAllowed: Bool) throws -> Declaration?                                       // done       
     func parseImportDeclaration() throws -> Declaration?                                          
     func parseExportDeclaration() throws -> Declaration?
     func parseClassDeclaration() throws -> Declaration?                                         //done
@@ -58,9 +69,9 @@ protocol Parsers {
     func parseDoWhileStatement() throws -> Statement?                                           // done 
 
     func parseForStatement() throws -> Statement?                                               // done   
-    func parseForInStatement() throws -> Statement?                                             // done   
-    func parseForOfStatement() throws -> Statement?                                             // done 
-    func parseForAwaitStatement() throws -> Statement?                                          // done
+    func parseForInStatement(left: ForEachLeft) throws -> Statement?                                             // done   
+    func parseForOfStatement(left: ForEachLeft) throws -> Statement?                                             // done 
+    func parseForAwaitOfStatement() throws -> Statement?                                          // done
 
     func parseReturnStatement() throws -> Statement?                                            // done
     func parseBreakStatement() throws -> Statement?                                             // done   
@@ -121,7 +132,7 @@ protocol Parsers {
     func parseSpreadProperty() throws -> ObjectProperty?
 
 
-    func parseArrowFunction(isAsync: Bool, Args: Expression) throws -> Expression?              // done
+    func parseArrowFunction(isAsync: Bool, Args:[Pattern] ) throws -> Expression?              // done
     func parseSequenceExpression(lhs: Expression, rhs: Expression) throws -> Expression?        // done
 
     func parseParenthesizedExpression() throws -> Expression?                                   // done   
@@ -421,6 +432,33 @@ extension Parser : Parsers {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
 
+        let simulateWhetherParentesizedExpressionIsArrowFunctionArg: (_ currentIdx: Int, _ tokens: [Token]) -> Bool
+                 = { currentIdx, tokens in
+                    var tempIndex = currentIdx
+                    var parenCount = 1
+                    while parenCount > 0 && tempIndex < tokens.count {
+                        tempIndex += 1
+                        if tempIndex >= tokens.count {
+                            return false
+                        }
+                        switch tokens[tempIndex].tokenType {
+                            case .leftParen:
+                                parenCount += 1
+                            case .rightParen:
+                                parenCount -= 1
+                            default:
+                                continue
+                        }
+                    }
+
+                    if case .arrow = tokens[tempIndex].tokenType {
+                        return true
+                    }
+                    
+                    return false
+
+                }  
+
         switch tok {
             case .privateIdentifier(let string):
                 advance()
@@ -454,7 +492,7 @@ extension Parser : Parsers {
                     advance(); // consume identifier before entering arrow function parsing
                     return try parseArrowFunction(
                         isAsync: false,
-                        Args: Expression.identifier(name)
+                        Args: [.bindingIdentifier(name)]
                     )
                 }
                 advance()
@@ -478,14 +516,30 @@ extension Parser : Parsers {
                 advance()
                 return Expression.literal(.undefined)
             case .leftParen:
-                let expr = try parseParenthesizedExpression()
-                if currentToken()?.tokenType == .arrow {
+
+                advance()
+
+                let simulationResult = simulateWhetherParentesizedExpressionIsArrowFunctionArg(currentTokenIndex, tokens)
+
+                if simulationResult {
+                    var patterns: [Pattern] = []
+                    while currentToken()?.tokenType != .rightParen {
+                        if let param = try parsePattern() {
+                            patterns.append(param)
+                        }
+
+                        if case .comma = currentToken()?.tokenType {
+                            advance() // consume ','
+                            continue
+                        }
+                    }
                     return try parseArrowFunction(
-                        isAsync: false, 
-                        Args: expr! // TODO: make it safer
+                        isAsync: false,
+                        Args: patterns
                     )
+                } else {
+                    return try parseParenthesizedExpression()
                 }
-                return expr
             case .leftBracket:
                 return try parseArrayLiteral()
             case .leftBrace:
@@ -503,19 +557,31 @@ extension Parser : Parsers {
                     
                         return try parseArrowFunction(
                             isAsync: true,
-                            Args: Expression.identifier(name)
+                            Args: [.bindingIdentifier(name)]
                         )
 
                     }
 
                 } else if case .leftParen = currentToken()?.tokenType {
                    
-                    let expr = try parseParenthesizedExpression()
-                        
+                    let simulationResult = simulateWhetherParentesizedExpressionIsArrowFunctionArg(currentTokenIndex, tokens)
+                    if simulationResult {
+                        var patterns: [Pattern] = []
+                        while currentToken()?.tokenType != .rightParen {
+                            if let param = try parsePattern() {
+                                patterns.append(param)
+                            }
+
+                            if case .comma = currentToken()?.tokenType {
+                                advance() // consume ','
+                                continue
+                            }
+                        }
                         return try parseArrowFunction(
                             isAsync: true,
-                            Args: expr! //TODO: make it safer
+                            Args: patterns
                         )
+                    }
                     
                 }
                 
@@ -724,10 +790,10 @@ extension Parser : Parsers {
 
         try expect(tokenType: .leftParen) // consume '('
 
-        var params: [Expression] = []
+        var params: [Pattern] = []
 
         while currentToken()?.tokenType != .rightParen {
-            if let param = try parseExpression(precedence: 0, allowComma: false) {
+            if let param = try parsePattern() {
                 params.append(param)
             }
 
@@ -754,39 +820,21 @@ extension Parser : Parsers {
 
     }
 
-    func parseArrowFunction(isAsync: Bool, Args: Expression) throws -> Expression? {
+    func parseArrowFunction(isAsync: Bool, Args: [Pattern]) throws -> Expression? {
         // ( ) => {}
         // arg => {}
         // ~~~ shown parts are already consumed
-        if case .parenthesized(let params) = Args {
-            advance()
+        try expect(tokenType: .arrow) // consume '=>'
 
-            if let bodyStmt = try parseStatement() {
-                
-                return Expression.arrowFunction(
-                    params: [params], //TODO: fix later for multiple params 
-                    body: bodyStmt,
-                    isAsync: isAsync
-                )
-            } else {
-                throw ParserError.invalidSyntax(currentTokenIndex)
-            }
-
-
-        } else if case .identifier(let name) = Args {
-            advance() // consume '=>'
-            if let bodyStmt = try parseStatement() {
-    
-                return Expression.arrowFunction(
-                    params: [Expression.identifier(name)],
-                    body: bodyStmt,
-                    isAsync: isAsync
-                )
-            } else {
-                throw ParserError.invalidSyntax(currentTokenIndex)
-            }
-
+        guard let body = try parseStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
         }
+        
+        return Expression.arrowFunction(
+            params: Args,
+            body: body,
+            isAsync: isAsync
+        )
         
         return nil   
     }
@@ -924,11 +972,11 @@ extension Parser : Parsers {
 
         try expect(tokenType: .leftParen) // consume '('
 
-        var params: [Expression] = []
+        var params: [Pattern]? = []
 
         while currentToken()?.tokenType != .rightParen {
-            if let param = try parseExpression(precedence: 0, allowComma: false) {
-                params.append(param)
+            if let param = try parsePattern() {
+                params?.append(param)
             }
 
             if case .comma = currentToken()?.tokenType {
@@ -977,7 +1025,7 @@ extension Parser : Parsers {
         }
 
         try expect(tokenType: .leftParen) // consume '('
-        guard let param = try parseExpression(precedence: 0, allowComma: false) else {
+        guard let param = try parsePattern() else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
         try expect(tokenType: .rightParen) // consume ')'
@@ -1032,12 +1080,13 @@ extension Parser : Parsers {
             )
         }
 
-        var args: [Expression] = []
+        var args: [Pattern]? = []
 
         while currentToken()?.tokenType != .rightParen {
             
-            let arg = try parseExpression(precedence: 0, allowComma: false)
-            args.append(arg!)
+            if let arg = try parsePattern() {
+                args?.append(arg)
+            }
 
             if case .comma = currentToken()?.tokenType {
                 advance()                               // consume ','
@@ -1368,11 +1417,11 @@ extension Parser : Parsers {
 
         try expect(tokenType: .leftParen) // consume '('
 
-        var args: [Expression?] = []
+        var args: [Pattern]? = []
 
         while currentToken()?.tokenType != .rightParen {
-            if let param = try parseExpression(precedence: 0, allowComma: false) {
-                args.append(param)
+            if let param = try parsePattern() {
+                args?.append(param)
             }
 
             if case .comma = currentToken()?.tokenType {
@@ -1426,7 +1475,7 @@ extension Parser : Parsers {
 
         try expect(tokenType: .leftParen) // consume '('
 
-        guard let arg = try parseExpression(precedence: 0, allowComma: false) else {
+        guard let arg = try parsePattern() else {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
 
@@ -1552,9 +1601,9 @@ extension Parser : Parsers {
 
         try expect(tokenType: .leftParen)   // consume '(' 
     
-        var args: [Expression?] = []                                                        
-        while case let .identifier(param_name) = currentToken()?.tokenType {               
-            args.append(.identifier(param_name))
+        var args: [Pattern] = []                                                        
+        while let param_name = try parsePattern() { // parse parameters            
+            args.append(param_name)
             advance()                                   // consume parameter name
             if case .comma = currentToken()?.tokenType {
                 advance()                               // consume ','
@@ -1579,69 +1628,29 @@ extension Parser : Parsers {
 
     }
     
-    func parseVariableDeclaration() throws -> Declaration? {
+    func parseVariableDeclaration(isInitAllowed: Bool = true) throws -> Declaration? {
         
         advance() // consume 'var' keyword
+        var declarations: [VariableDeclarator] = []
 
-        var declarations: [Expression?] = []
-        var maybeAssignments: [Expression]? = nil
+        while let declarator = try parseVariableDeclarator(isInitAllowed: isInitAllowed) {
+            declarations.append(declarator)
 
-        if let expr = try parseExpression(precedence: 0){
-            switch expr {
-                case .identifier(_):
-                    declarations.append(expr)
-
-                case .assignment(let left, let op , _):
-                    
-                    if op != .binaryOp(.assign) {
-                        throw ParserError.invalidSyntax(currentTokenIndex)
-                    }
-                    
-                    declarations.append(left)
-
-                    if maybeAssignments == nil {
-                        maybeAssignments = []
-                    }
-                    maybeAssignments?.append(expr)
-                
-                case .sequence(let exprs): //Parse sequence of expressions for multiple declarations
-                    for e in exprs {
-                        switch e {
-                            case .identifier(_):
-                                declarations.append(e)
-                            case .assignment(let left, let op , _):
-                                
-                                if op != .binaryOp(.assign) {
-                                    throw ParserError.invalidSyntax(currentTokenIndex)
-                                }
-                                
-                                declarations.append(left)
-                                
-                                if maybeAssignments == nil {
-                                    maybeAssignments = []
-                                }
-                                maybeAssignments?.append(e)
-                            default:
-                                throw ParserError.invalidSyntax(currentTokenIndex)
-                        }
-                    }
-
-                default:
-                    throw ParserError.invalidSyntax(currentTokenIndex)
-            }   
-            
+            if case .comma = currentToken()?.tokenType {
+                advance() // consume ','
+            } else {
+                break
+            }
         }
         
-    
         try consumeSemicolon()
 
         return .variable(
-            declarations: declarations,
-            assignments: maybeAssignments
+            declarators: declarations
         )
     }
     
-    func parseLexicalDeclaration() throws -> Declaration? {
+    func parseLexicalDeclaration(isInitAllowed: Bool = true) throws -> Declaration? {
         
         var kind : LexicalKind
         switch currentToken()?.tokenType {
@@ -1655,59 +1664,27 @@ extension Parser : Parsers {
 
         advance() // consume 'let' or 'const' keyword
     
-        var declarations: [Expression?] = []
-        var maybeAssignments: [Expression]? = nil
+        var declarations: [VariableDeclarator] = []
 
-        if let expr = try parseExpression(precedence: 0){
-            switch expr {
-                case .identifier(_):
-                    declarations.append(expr)
-
-                case .assignment(let left, let op , _):
-                    
-                    if op != .binaryOp(.assign) {
-                        throw ParserError.invalidSyntax(currentTokenIndex)
-                    }
-                    
-                    declarations.append(left)
-
-                    if maybeAssignments == nil {
-                        maybeAssignments = []
-                    }
-                    maybeAssignments?.append(expr)
-                
-                case .sequence(let exprs): //Parse sequence of expressions for multiple declarations
-                    for e in exprs {
-                        switch e {
-                            case .identifier(_):
-                                declarations.append(e)
-                            case .assignment(let left, let op , _):
-                                
-                                if op != .binaryOp(.assign) {
-                                    throw ParserError.invalidSyntax(currentTokenIndex)
-                                }
-                                
-                                declarations.append(left)
-                                
-                                if maybeAssignments == nil {
-                                    maybeAssignments = []
-                                }
-                                maybeAssignments?.append(e)
-                            default:
-                                throw ParserError.invalidSyntax(currentTokenIndex)
-                        }
-                    }
-
-                default:
-                    throw ParserError.invalidSyntax(currentTokenIndex)
-            }   
+        while let declarator = try parseVariableDeclarator(isInitAllowed: isInitAllowed) {
             
+            declarations.append(declarator)
+
+            if case .comma = currentToken()?.tokenType {
+                advance() // consume ','
+            } else {
+                break
+            }
         }
     
             try consumeSemicolon()
     
-            return .lexical(kind: kind, declarations: declarations, assignments: maybeAssignments)
+            return .lexical(kind: kind, declarators: declarations)
         
+    }
+
+    func parseVariableDeclarator(isInitAllowed: Bool) throws -> VariableDeclarator? {
+        return nil
     }
     
     func parseImportDeclaration() throws -> Declaration? {
@@ -1847,73 +1824,225 @@ extension Parser : Parsers {
     }
 
     func parseForStatement() throws -> Statement? {
-        
-        advance()
 
+        advance()
+        
         if case .await = currentToken()?.tokenType {
-            return try parseForAwaitStatement()
+            return try parseForAwaitOfStatement()
         }
         
         try expect(tokenType: .leftParen)
 
-        for n in [1,2] {
-            switch peekToken(aheadBy: n)?.tokenType {
-                case .of:
-                    return try parseForOfStatement()
-                case .binaryOp(.in):
-                    return try parseForInStatement()
+        // Things get complicated here since we need to 
+        // lookahead and check whether we are parsing a 
+        // for classic, for in or for of statement.
+
+        let parseForInOfLeft = { () throws -> ForEachLeft? in
+            switch self.currentToken()?.tokenType {
+                case .var:
+                    if let decl = try self.parseVariableDeclaration(isInitAllowed: false) {
+                        return .declaration(decl)
+                    }
+                case .let, .const:
+                    if let decl = try self.parseLexicalDeclaration(isInitAllowed: false) {
+                        return .declaration(decl)
+                    }
                 default:
-                    break
+                    if let pat = try self.parsePattern() {
+                        return .pattern(pat)
+                    }
             }
+            return nil
         }
 
-
-        var maybeDecl: Declaration? = nil
-        var maybeExpr: Expression? = nil
-
-        switch currentToken()?.tokenType {
-            case .semicolon:
-                break;
-            case .var:
-                maybeDecl = try parseVariableDeclaration()
-            case .let, .const:
-                maybeDecl = try parseLexicalDeclaration()
-            case .identifier:
-                maybeExpr = try parseExpression(precedence: 0)
-                switch maybeExpr {
-                    case .assignment:
-                        break;
-                    case .identifier:
-                        break;
-                    default:
-                        throw ParserError.invalidSyntax(currentTokenIndex)
+        let parseInitPart = { () throws -> ForInit? in
+                    if case .semicolon = self.currentToken()?.tokenType {
+                        return nil // for(;;) case
+                    }
+                    if let decl = try self.parseVariableDeclaration(isInitAllowed: true) {
+                        return .declaration(decl)
+                    }
+                    if let expr = try self.parseExpression(precedence: 0, allowComma: false) {
+                        return .expression(expr)
+                    }
+                    return nil
                 }
-            default:
-                break
-        } 
-        try consumeSemicolon()
+
+        enum ForClassicOrInOrOf {
+            case forClassic
+            case forIn
+            case forOf
+        }
+
+        let simulateNestingLevel: ForClassicOrInOrOf = { parser in 
+            var ParenNestingLevel: Int = 0
+            var BracketNestingLevel: Int = 0
+            var BraceNestingLevel: Int = 0
+            var virtualIndexState = parser.currentTokenIndex
+                while parser.peekToken(aheadBy: virtualIndexState)?.tokenType != .of && parser.peekToken(aheadBy: virtualIndexState)?.tokenType != .binaryOp(.in) {
+                    switch parser.peekToken(aheadBy: virtualIndexState)?.tokenType {
+                        case .leftParen:
+                            ParenNestingLevel += 1
+                        case .rightParen:
+                            ParenNestingLevel -= 1
+                        case .leftBracket:
+                            BracketNestingLevel += 1
+                        case .rightBracket:
+                            BracketNestingLevel -= 1
+                        case .leftBrace:
+                            BraceNestingLevel += 1
+                        case .rightBrace:
+                            BraceNestingLevel -= 1
+                        default:
+                            break
+                    }
+                    if ParenNestingLevel == 0 && BracketNestingLevel == 0 && BraceNestingLevel == 0 {
+                        switch parser.peekToken(aheadBy: virtualIndexState)?.tokenType {
+                            case .of:
+                                return .forOf
+                            case .binaryOp(.in):
+                                return .forIn
+                            case .semicolon:
+                                return .forClassic
+                            default:
+                                break;
+                        }
+                    }
+                    virtualIndexState += 1
+                }
+                fatalError("Should not reach here")
+            }(self)
+
         
-        var maybeTest: Expression? = nil
+        
+        switch simulateNestingLevel {
+            case .forOf:
+                if let left = try parseForInOfLeft() {
+                    return try parseForOfStatement(left: left)
+                }
+            case .forIn:
+                if let left = try parseForInOfLeft() {
+                    return try parseForInStatement(left: left)
+                }
+            case .forClassic:
 
-        switch currentToken()?.tokenType {
-            case .semicolon:
-                break;
-            default:
-                maybeTest = try parseExpression(precedence: 0)
-            }   
+                var initPart: ForInit? = nil
+                var testExpr: Expression? = nil
+                var updateExpr: Expression? = nil
 
-        try consumeSemicolon()
+                if case .semicolon = currentToken()?.tokenType {
+                    initPart = nil
+                } else {
+                    initPart = try parseInitPart()!
+                }
+                
+                try expect(tokenType: .semicolon)
 
-        var maybeUpdate: Expression? = nil
+                if case .semicolon = currentToken()?.tokenType {
+                    testExpr = nil
+                } else {
+                    testExpr = try parseExpression(precedence: 0, allowComma: false)
+                }
 
-        switch currentToken()?.tokenType {
-            case .rightParen:
-                break;
-            case .semicolon:
-                throw ParserError.unexpectedToken(currentTokenIndex);
-            default:
-                maybeUpdate = try parseExpression(precedence: 0)
+                try expect(tokenType: .semicolon)
+                
+                if case .rightParen = currentToken()?.tokenType {
+                    updateExpr = nil
+                } else {
+                    updateExpr = try parseExpression(precedence: 0, allowComma: false)
+                }
+
+                try expect(tokenType: .rightParen)
+
+                guard let bodyStmt = try parseStatement() else {
+                    throw ParserError.invalidSyntax(currentTokenIndex)
+                }
+
+                return Statement.forStatement(
+                    init: initPart!,
+                    test: testExpr,
+                    update: updateExpr,
+                    body: bodyStmt
+                )
             }
+        fatalError("Should not reach here")
+
+    }
+
+    func parseForInStatement(left: ForEachLeft) throws -> Statement? {
+        //leftParen already consumed by parseForStatement()->caller function
+        
+        try expect(tokenType: .binaryOp(.in))
+        guard let rightExpr = try parseExpression(precedence: 0) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        
+        try expect(tokenType: .rightParen)
+
+        guard let bodyStmt = try parseStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+        return .forInStatement(
+            left: left,
+            right: rightExpr,
+            body: bodyStmt
+                
+        )
+        
+    }
+    func parseForOfStatement(left: ForEachLeft) throws -> Statement? {
+        
+        //leftParen already consumed by parseForStatement()->caller function
+
+         try expect(tokenType: .of) 
+         
+         guard let rightExpr = try parseExpression(precedence: 0) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+         }  
+
+         try expect(tokenType: .rightParen)
+
+         guard let bodyStmt = try parseStatement() else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
+
+        return .forOfStatement(
+            left: left,
+            right: rightExpr,
+            body: bodyStmt
+                
+        )
+    }
+
+    func parseForAwaitOfStatement() throws -> Statement? {
+
+        advance() // consume 'await' keyword
+        try expect(tokenType: .leftParen) // consume '('
+
+        let leftPartParser: (Parser) throws -> ForEachLeft = { parser in
+            switch parser.currentToken()?.tokenType {
+                case .var:
+                        if let decl = try parser.parseVariableDeclaration(isInitAllowed: false) {
+                            return .declaration(decl)
+                        }
+                    case .let, .const:
+                        if let decl = try parser.parseLexicalDeclaration(isInitAllowed: false) {
+                        return .declaration(decl)
+                    }
+                default:
+                    if let pat = try parser.parsePattern() {
+                        return .pattern(pat)
+                    }
+                }
+
+            fatalError ("Should not reach here since leftPartParser is only called when current token can start a pattern or declaration")
+            }
+
+        let leftPart = try leftPartParser(self)
+        try expect(tokenType: .of) 
+        guard let rightExpr = try parseExpression(precedence: 0) else {
+            throw ParserError.invalidSyntax(currentTokenIndex)
+        }
 
         try expect(tokenType: .rightParen)
 
@@ -1921,214 +2050,14 @@ extension Parser : Parsers {
             throw ParserError.invalidSyntax(currentTokenIndex)
         }
 
-        return Statement.forStatement(
-            initDecl: maybeDecl,
-            initExpr: maybeExpr,
-            test: maybeTest,
-            update: maybeUpdate,
-            body: bodyStmt
-        )
-    }
-
-    func parseForInStatement() throws -> Statement? {
-
-        //leftParen already consumed by parseForStatement()--> caller function
-
-        var maybeDecl: Declaration? = nil
-        var maybeExpr: Expression? = nil
-        
-        switch currentToken()?.tokenType {
-            case .var:
-                advance() // consume 'var' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                advance() // consume identifier
-                maybeDecl = .variable(
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .let, .const:
-                advance() // consume 'let' or 'const' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                
-                advance() // consume identifier
-                
-                let kind: LexicalKind = (currentToken()?.tokenType == .let) ? .let : .const
-                
-                maybeDecl = .lexical(
-                    kind: kind,
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .identifier (let only_name):
-                let id = Expression.identifier(only_name)
-                
-                maybeExpr = id
-                
-                advance() // consume identifier
-        
-            default:
-                break
-        }
-
-        try expect(tokenType: .binaryOp(.in))
-
-        guard let Expression = try parseExpression(precedence: 0) else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
-        try expect(tokenType: .rightParen)
-
-        guard let Statement = try parseStatement() else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
-        return .forInStatement(
-            left: maybeDecl, 
-            leftExpr: maybeExpr,
-            right: Expression, 
-            body: Statement
-        )
-        
-    }
-    func parseForOfStatement() throws -> Statement? {
-        
-        //leftParen already consumed by parseForStatement()->caller function
-
-        var maybeDecl: Declaration? = nil
-        var maybeExpr: Expression? = nil
-        
-        switch currentToken()?.tokenType {
-            case .var:
-                advance() // consume 'var' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                advance() // consume identifier
-                maybeDecl = .variable(
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .let, .const:
-                advance() // consume 'let' or 'const' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                
-                advance() // consume identifier
-                
-                let kind: LexicalKind = (currentToken()?.tokenType == .let) ? .let : .const
-                
-                maybeDecl = .lexical(
-                    kind: kind,
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .identifier (let only_name):
-                let id = Expression.identifier(only_name)
-                
-                maybeExpr = id
-                
-                advance() // consume identifier
-        
-            default:
-                break
-        }
-
-        try expect(tokenType: .of)
-
-        guard let Expression = try parseExpression(precedence: 0) else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
-        try expect(tokenType: .rightParen)
-
-        guard let Statement = try parseStatement() else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
-        return .forOfStatement(
-            left: maybeDecl, 
-            leftExpr: maybeExpr,
-            right: Expression, 
-            body: Statement
-        )
-    }
-
-    func parseForAwaitStatement() throws -> Statement? {
-
-        advance() // consume 'await' keyword
-
-        try expect(tokenType: .leftParen)
-
-        var maybeDecl: Declaration? = nil
-        var maybeExpr: Expression? = nil
-        
-        switch currentToken()?.tokenType {
-            case .var:
-                advance() // consume 'var' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                advance() // consume identifier
-                maybeDecl = .variable(
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .let, .const:
-                advance() // consume 'let' or 'const' keyword
-                guard case .identifier (let var_name) = currentToken()?.tokenType else {
-                    throw ParserError.unexpectedToken(currentTokenIndex)
-                }
-                let id = Expression.identifier(var_name)
-                
-                advance() // consume identifier
-                
-                let kind: LexicalKind = (currentToken()?.tokenType == .let) ? .let : .const
-                
-                maybeDecl = .lexical(
-                    kind: kind,
-                    declarations: [id],
-                    assignments: nil
-                )
-            case .identifier (let only_name):
-                let id = Expression.identifier(only_name)
-                
-                maybeExpr = id
-                
-                advance() // consume identifier
-        
-            default:
-                break
-        }
-
-        try expect(tokenType: .of)
-
-        guard let Expression = try parseExpression(precedence: 0) else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-
-        try expect(tokenType: .rightParen)
-
-        guard let Statement = try parseStatement() else {
-            throw ParserError.invalidSyntax(currentTokenIndex)
-        }
-        
         return .forAwaitOfStatement(
-            left: maybeDecl, 
-            leftExpr: maybeExpr,
-            right: Expression, 
-            body: Statement
+            left: leftPart,
+            right: rightExpr,
+            body: bodyStmt
+                
         )
-    
+
+       
     }
 
 
@@ -2194,7 +2123,7 @@ extension Parser : Parsers {
 
         var catchOrFinallyCount = 0
 
-        var catchDeclarations: [Expression?] = []
+        var catchDeclarations: [Pattern]? = []
         var handler: Statement? = nil
 
         if case .catch = currentToken()?.tokenType {
@@ -2203,9 +2132,9 @@ extension Parser : Parsers {
             try expect (tokenType: .leftParen)
 
             while case .identifier (let paramName) = currentToken()?.tokenType {
-                let param = Expression.identifier(paramName)
+                let param: Pattern = .bindingIdentifier(paramName)
                 advance(); // consume identifier
-                catchDeclarations.append(param)
+                catchDeclarations?.append(param)
 
                 if case .comma = currentToken()?.tokenType {
                     advance(); // consume ','
@@ -2270,6 +2199,39 @@ extension Parser : Parsers {
     func parseEmptyStatement() throws -> Statement? {
         advance() // consume ';'
         return .empty
+    }
+
+    func parsePattern() throws -> Pattern? {
+        switch currentToken()?.tokenType {
+            case .leftBracket:
+                return try parseArrayPattern()
+            case .leftBrace:
+                return try parseObjectPattern()
+            case .spread:
+                return try parseRestPattern()
+            case .identifier(let name):
+                if case .binaryOp(.assign) = peekToken(aheadBy: 1)?.tokenType {
+                    return try parseObjectPattern() // handle object pattern with identifier key
+                }
+                advance() // consume identifier
+                return .bindingIdentifier(name)
+            default:
+                fatalError("Should not reach here since parsePattern is only called when current token can start a pattern")
+
+        }
+    }
+    func parseAssignmentPattern() throws -> Pattern? {
+        return nil
+    }
+    func parseObjectPattern() throws -> Pattern? {
+        return nil
+    }
+    func parseArrayPattern() throws -> Pattern? {
+        return nil 
+    }
+
+    func parseRestPattern() throws -> Pattern? {
+        return nil
     }
 
 

@@ -39,3 +39,11 @@ public func boxOptList(_ name: String, _ values: [TreeBox?]) -> TreeBox {
     let rendered = values.map { $0 ?? box("<nil>") }
     return boxList(name, rendered)
 }
+
+public func boxListOpt(_ name: String, _ values: [TreeBox]?) -> TreeBox {
+    if let values = values {
+        return boxList(name, values)
+    } else {
+        return box(name, [box("<nil>")])
+    }
+}
