@@ -5,13 +5,33 @@ public indirect enum ASTNode {
     case expression(Expression)
     case statement(Statement)
     case declaration(Declaration)
-    case pattern(Pattern)
     case program(Program)
 }
 
 // Program
 public indirect enum Program {
     case program(body: [Statement])
+}
+
+public indirect enum AssignmentTarget {
+    case identifier(String)
+    case member(object: Expression, property: Expression)
+    case computedMember(object: Expression, property: Expression)
+    case destructuring(DestructuringPattern)
+}
+
+public indirect enum DestructuringPattern {
+    case object(properties: [DestructuringObjectProperty])
+    case array(elements: [DestructuringPattern?])           // elision için nil
+    case rest(AssignmentTarget)                             // ...target
+    case assignment(target: AssignmentTarget, defaultValue: Expression) // target = expr
+    case target(AssignmentTarget)                           // leaf target (identifier/member/...) 
+}
+
+public enum DestructuringObjectProperty {
+    case property(key: PropertyKey, value: DestructuringPattern) // {a: target}
+    case shorthand(String)                                       // {a}
+    case rest(AssignmentTarget)                                  // {...target}
 }
 
 public indirect enum Pattern {
@@ -37,9 +57,9 @@ public indirect enum Expression {
     case this
 
     case binary(left: Expression, operator_: TokenType, right: Expression)
-    case unary(operator_: TokenType, argument: Expression, isPrefix: Bool)
+    case unary(operator_: TokenType, argument: AssignmentTarget, isPrefix: Bool)
 
-    case assignment(left: Expression, operator_: TokenType, right: Expression)
+    case assignment(left: AssignmentTarget, operator_: TokenType, right: Expression)
 
     case call(callee: Expression, arguments: [Expression])
     case member(object: Expression, property: Expression)
@@ -74,7 +94,7 @@ public indirect enum Expression {
 
     public enum ObjectProperty {
         case property(key: PropertyKey, value: Expression)     // a: expr
-        case shorthand(PropertyKey)                            // {a}
+        case shorthand(String)                            // {a}
         case method(key: PropertyKey, args: [Pattern]?, body: Statement, isAsync: Bool, isGenerator: Bool)      // {a(){}}
         case getter(key: PropertyKey, body: Statement)      // {get x(){}}
         case setter(key: PropertyKey, arg: Pattern, body: Statement)      // {set x(v){}}
@@ -148,8 +168,10 @@ public enum ForInit {
 
 public enum ForEachLeft {
     case declaration(Declaration) // var/let/const + TEK declarator (init yasak)
-    case pattern(Pattern)         // destructuring / assignment target gibi
+    case target(AssignmentTarget) // identifier/member/destructuring target
 }
+
+
 
 // Case statements for switch
 public indirect enum CaseStatement {
@@ -237,8 +259,6 @@ extension ASTNode: CustomStringConvertible {
             return box("ASTNode.statement", [stmt.toTreeBox()])
         case .declaration(let decl):
             return box("ASTNode.declaration", [decl.toTreeBox()])
-        case .pattern(let pattern):
-            return box("ASTNode.pattern", [pattern.toTreeBox()])
         case .program(let prog):
             return box("ASTNode.program", [prog.toTreeBox()])
         }
@@ -602,8 +622,8 @@ extension ForEachLeft: CustomStringConvertible {
         switch self {
         case .declaration(let decl):
             return box("ForEachLeft.declaration", [decl.toTreeBox()])
-        case .pattern(let pattern):
-            return box("ForEachLeft.pattern", [pattern.toTreeBox()])
+        case .target(let target):
+            return box("ForEachLeft.target", [target.toTreeBox()])
         }
     }
 }
@@ -765,6 +785,72 @@ extension ClassElement: CustomStringConvertible {
 
         case .empty:
             return box("ClassElement.empty")
+        }
+    }
+    
+}
+
+extension DestructuringPattern: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .object(let properties):
+            return box("DestructuringPattern.object", [
+                boxList("properties", properties.map { $0.toTreeBox() })
+            ])
+        case .array(let elements):
+            return box("DestructuringPattern.array", [
+                boxOptList("elements", elements.map { $0?.toTreeBox() })
+            ])
+        case .rest(let target):
+            return box("DestructuringPattern.rest", [target.toTreeBox()])
+        case .assignment(let target, let defaultValue):
+            return box("DestructuringPattern.assignment", [
+                box("target", [target.toTreeBox()]),
+                box("defaultValue", [defaultValue.toTreeBox()])
+            ])
+        case .target(let target):
+            return box("DestructuringPattern.target", [target.toTreeBox()])
+        }
+    }
+}
+
+private extension DestructuringObjectProperty {
+    func toTreeBox() -> TreeBox {
+        switch self {
+        case .property(let key, let value):
+            return box("DestructuringObjectProperty.property", [
+                box("key", [key.toTreeBox()]),
+                box("value", [value.toTreeBox()])
+            ])
+        case .shorthand(let name):
+            return box("DestructuringObjectProperty.shorthand(\(name))")
+        case .rest(let target):
+            return box("DestructuringObjectProperty.rest", [target.toTreeBox()])
+        }
+    }
+}
+
+extension AssignmentTarget: CustomStringConvertible {
+    public var description: String { renderTree(toTreeBox()) }
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .identifier(let name):
+            return box("AssignmentTarget.identifier(\(name))")
+        case .member(let object, let property):
+            return box("AssignmentTarget.member", [
+                box("object", [object.toTreeBox()]),
+                box("property", [property.toTreeBox()])
+            ])
+        case .computedMember(let object, let property):
+            return box("AssignmentTarget.computedMember", [
+                box("object", [object.toTreeBox()]),
+                box("property", [property.toTreeBox()])
+            ])
+        case .destructuring(let pattern):
+            return box("AssignmentTarget.destructuring", [pattern.toTreeBox()])
         }
     }
 }
