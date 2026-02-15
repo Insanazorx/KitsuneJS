@@ -23,6 +23,49 @@ public protocol NodeWalker {
     mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool
     mutating func postClassElem(nodeId: Int, node: ClassElement)
 
+    mutating func preForInit(nodeId: Int, node: ForInit) -> Bool
+    mutating func postForInit(nodeId: Int, node: ForInit)
+
+    mutating func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool
+    mutating func postForEachLeft(nodeId: Int, node: ForEachLeft)
+
+    mutating func prePattern(nodeId: Int, node: Pattern) -> Bool
+    mutating func postPattern(nodeId: Int, node: Pattern)
+
+    mutating func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool
+    mutating func postAssignmentTarget(nodeId: Int, node: AssignmentTarget)
+
+    mutating func prePropKey(nodeId: Int, node: PropertyKey) -> Bool
+    mutating func postPropKey(nodeId: Int, node: PropertyKey)
+
+    mutating func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool
+    mutating func postClassElemKey(nodeId: Int, node: ClassElementKey)
+
+    mutating func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool
+    mutating func postDestructuringPattern(nodeId: Int, node: DestructuringPattern)
+
+    mutating func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool
+    mutating func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty)
+
+    mutating func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool
+    mutating func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty)
+
+    mutating func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool
+    mutating func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey)
+
+    mutating func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool
+    mutating func postVariableDeclarator(nodeId: Int, node: VariableDeclarator)
+
+    mutating func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool
+    mutating func postArrayElement(nodeId: Int, node: ArrayElement)
+
+    mutating func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool
+    mutating func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement)
+
+    mutating func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool
+    mutating func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement)
+
+
     mutating func handlePrimary(nodeId: Int, node: Expression)
     
     mutating func specializedScopeBuilderVisit(nodeId: Int, 
@@ -105,52 +148,41 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 walkStatement(body)
                 walkExpression(test)
                 
-            case .forStatement(let initDecl,
-                                let initExpr, 
+            case .forStatement( let initial, 
                                 let test,
                                 let update,
                                 let body):
-                if let initDecl = initDecl {
-                    walkDeclaration(initDecl)
+                if let initializer = initial {
+                    walkForInit(initializer)
                 }
-                if let initExpr = initExpr {
-                    walkExpression(initExpr)
-                }
+                
                 if let test = test {
                     walkExpression(test)
                 }
+
                 if let update = update {
                     walkExpression(update)
                 }
+
                 walkStatement(body)
             
-            case .forInStatement(let left, let leftExpr, let right, let body):
-                if let left = left {    
-                    walkDeclaration(left)
-                }
-                if let leftExpr = leftExpr {
-                    walkExpression(leftExpr)
-                }
+            case .forInStatement(let left, let right, let body):
+                
+                walkForEachLeft(left)
                 walkExpression(right)   
                 walkStatement(body)
-            case .forOfStatement(let left, let leftExpr, let right, let body):
-                if let left = left {    
-                    walkDeclaration(left)
-                }
-                if let leftExpr = leftExpr {
-                    walkExpression(leftExpr)
-                }
+
+            case .forOfStatement(let left, let right, let body):
+                walkForEachLeft(left)
                 walkExpression(right)   
                 walkStatement(body)
-            case .forAwaitOfStatement(let left, let leftExpr, let right, let body):
-                if let left = left {    
-                    walkDeclaration(left)
-                }
-                if let leftExpr = leftExpr {
-                    walkExpression(leftExpr)
-                }
+
+            case .forAwaitOfStatement(let left, let right, let body):
+                
+                walkForEachLeft(left)
                 walkExpression(right)   
                 walkStatement(body)
+
             case .returnStatement(let expr):
                 if let expr = expr {
                     walkExpression(expr)
@@ -179,9 +211,10 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         mode: .catch
                     )
 
-                catchDeclarations.forEach {
-                    if let decl = $0 {
-                        walkExpression(decl)
+                
+                if let catchDecls = catchDeclarations {
+                    catchDecls.forEach {
+                        walkPattern($0)
                     }
                 }
 
@@ -217,6 +250,34 @@ public struct WalkerImpl<Walker: NodeWalker> {
             
     }
 
+    mutating func walkForInit(_ init: ForInit){
+        let fid = allocNodeId()
+        _ = walker.preForInit(nodeId: fid, node: `init`)
+        
+        switch `init` {
+        case .declaration(let decl):
+            walkDeclaration(decl)
+        case .expression(let expr):
+            walkExpression(expr)
+        }
+
+        walker.postForInit(nodeId: fid, node: `init`)
+    }
+
+    mutating func walkForEachLeft(_ left: ForEachLeft) {
+        let fid = allocNodeId()
+        _ = walker.preForEachLeft(nodeId: fid, node: left)
+
+        switch left {
+        case .declaration(let decl):
+            walkDeclaration(decl)
+        case .target(let expr):
+            walkAssignmentTarget(expr)
+        }
+
+        walker.postForEachLeft(nodeId: fid, node: left)
+    }
+
     mutating func walkExpression(_ expr: Expression){
         let eid = allocNodeId()
 
@@ -249,7 +310,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 expr.forEach { walkExpression($0) }
             
             case .assignment(let left, _, let right):
-                walkExpression(left)
+                walkAssignmentTarget(left)
                 walkExpression(right)
 
             case .new(let callee, let arguments):
@@ -269,7 +330,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 walkExpression(argument)
 
             case .arrayLiteral(let elements):
-                elements.forEach { walkExpression($0) }
+                elements.forEach { walkArrayElement($0) }
 
             case .functionExpression(let name,
                                     let params,
@@ -286,9 +347,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         mode: .param
                     )
                 
-                params.forEach { if let param = $0 {
-                    walkExpression(param)
-                } }
+                if let params = params {
+                    params.forEach { 
+                        walkPattern($0)
+                    }
+                }
 
                 _ = walker.specializedScopeBuilderVisit( // for function expression param scope processing
                         nodeId: eid, 
@@ -321,10 +384,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         phase: .pre,
                         mode: .param
                     )
-
-                params.forEach { if let param = $0 {
-                    walkExpression(param)
-                } }
+                    if let params = params {
+                        params.forEach { 
+                            walkPattern($0)
+                        }
+                    }
 
                 _ = walker.specializedScopeBuilderVisit( // for arrow function param scope processing
                         nodeId: eid, 
@@ -346,39 +410,40 @@ public struct WalkerImpl<Walker: NodeWalker> {
         walker.postExpr(nodeId: eid, node: expr)
     }
 
+    mutating func walkArrayElement (_ element: ArrayElement) {
+        let elementId = allocNodeId()
+        _ = walker.preArrayElement(nodeId: elementId, node: element)
+
+        switch element {
+        case .element(let expr):
+            walkExpression(expr)
+        case .spread(let expr):
+            walkExpression(expr)
+        case .elision:
+            break
+        }
+        walker.postArrayElement(nodeId: elementId, node: element)
+    }
+
     mutating func walkDeclaration(_ decl: Declaration) {
         let did = allocNodeId()
 
         _ = walker.preDecl(nodeId: did, node: decl)
 
         switch decl {
-            case .variable(let declarations, 
-                           let assignments):
+            case .variable(let varDeclarators):
                 
-                declarations.forEach {
-                    if let decl = $0 {
-                        walkExpression(decl)
-                    }}
-                
-                if let assignments = assignments {
-                    assignments.forEach {
-                        walkExpression($0)
-                    }
+                varDeclarators.forEach {
+                    walkVariableDeclarator($0)
                 }
+                
 
-            case .lexical(_, let declarations, 
-                            let assignments):
+            case .lexical(_, let varDeclarators):
                 
-                declarations.forEach {
-                    if let decl = $0 {
-                        walkExpression(decl)
-                    }}
-                
-                if let assignments = assignments {
-                    assignments.forEach {
-                        walkExpression($0)
-                    }
+                varDeclarators.forEach {
+                    walkVariableDeclarator($0)
                 }
+                
             
             case .function(let name,
                            let params,
@@ -395,9 +460,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         mode: .param
                     )
                 
-                params.forEach { if let param = $0 {
-                    walkExpression(param)
-                } }
+                if let params = params {
+                    params.forEach {
+                        walkPattern($0)
+                    }
+                }
 
                 _ = walker.specializedScopeBuilderVisit( // for function declaration processing
                         nodeId: did, 
@@ -436,7 +503,20 @@ public struct WalkerImpl<Walker: NodeWalker> {
         walker.postDecl(nodeId: did, node: decl)
     }
 
+    mutating func walkVariableDeclarator(_ decl: VariableDeclarator) {
+        let vdId = allocNodeId()
+
+        _ = walker.preVariableDeclarator(nodeId: vdId, node: decl)
+        
+        walkPattern(decl.id)
+        if let initializer = decl.init_ {
+            walkExpression(initializer)
+        }
+        walker.postVariableDeclarator(nodeId: vdId, node: decl)
+    }
+
     mutating func walkObjProp(_ property: ObjectProperty){
+
         let opid = allocNodeId()
         
         _ = walker.preObjProp(nodeId: opid, node: property)
@@ -455,9 +535,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         mode: .param
                     )
 
-                params.forEach { if let param = $0 {
-                    walkExpression(param)
-                } }
+                if let params = params {
+                    params.forEach {
+                        walkPattern($0)
+                    }
+                }
 
                 _ = walker.specializedScopeBuilderVisit( // for method property param scope processing
                         nodeId: opid, 
@@ -467,7 +549,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
                 walkStatement(body)
             case .shorthand(let key):
-                walkPropKey(key)
+                break;
 
             case .spread(let arg):
                 walkExpression(arg)
@@ -485,7 +567,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         mode: .param
                     )
 
-                walkExpression(param)
+                walkPattern(param)
 
                 _ = walker.specializedScopeBuilderVisit( // for setter property processing
                         nodeId: opid, 
@@ -511,10 +593,9 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         phase: .pre,
                         mode: .param
                     )
-
-                params.forEach { if let param = $0 {
-                    walkExpression(param)
-                } }
+                if let params = params {
+                    params.forEach { walkPattern($0) }
+                }
 
                 _ = walker.specializedScopeBuilderVisit( 
                         nodeId: ceid, 
@@ -527,7 +608,12 @@ public struct WalkerImpl<Walker: NodeWalker> {
                          _,_,_):
                 walkClassElemKey(key)
 
-                let compactParams = params.compactMap { $0 }
+                let compactParams: [Pattern] = if let params = params {
+                    params.compactMap { $0 }
+                } else {
+                    []
+                }
+
                 if !compactParams.isEmpty {
                     _ = walker.specializedScopeBuilderVisit( 
                             nodeId: ceid, 
@@ -535,7 +621,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                             mode: .param
                         )
 
-                    compactParams.forEach { walkExpression($0) }
+                    compactParams.forEach { walkPattern($0) }
 
                     _ = walker.specializedScopeBuilderVisit( 
                             nodeId: ceid, 
@@ -563,7 +649,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         phase: .pre,
                         mode: .param
                     )
-                walkExpression(param)
+                walkPattern(param)
                 _ = walker.specializedScopeBuilderVisit( 
                         nodeId: ceid, 
                         phase: .post,
@@ -587,16 +673,25 @@ public struct WalkerImpl<Walker: NodeWalker> {
     }
 
     mutating func walkClassElemKey (_ key: ClassElementKey) {
+        let keyId = allocNodeId()
+        _ = walker.preClassElemKey(nodeId: keyId, node: key)
+        
         switch key {
         case .privateName(let name):
             walkExpression(name)
         case .publicKey(let key):
             walkPropKey(key)
         }
+        
+        walker.postClassElemKey(nodeId: keyId, node: key)
     }
 
 
     mutating func walkPropKey(_ key: PropertyKey) {
+        let keyId = allocNodeId()
+        _ = walker.prePropKey(nodeId: keyId, node: key)
+
+
         switch key {
         case .identifier:
             break
@@ -606,6 +701,164 @@ public struct WalkerImpl<Walker: NodeWalker> {
             walkExpression(value)
         }
 
+        walker.postPropKey(nodeId: keyId, node: key)
+
+    }
+    
+    mutating func walkObjPropKey(_ key: PropertyKey) {
+        let keyId = allocNodeId()
+        _ = walker.preObjectPatternPropertyKey(nodeId: keyId, node: key)
+
+        switch key {
+        case .identifier:
+            break
+        case .literal:
+            break
+        case .computed(let value):
+            walkExpression(value)
+        }
+
+        walker.postObjectPatternPropertyKey(nodeId: keyId, node: key)
+    }
+
+    mutating func walkAssignmentTarget(_ target: AssignmentTarget) {
+
+        let targetId = allocNodeId()
+        _ = walker.preAssignmentTarget(nodeId: targetId, node: target)
+
+        switch target {
+        case .identifier(let name):
+            break;
+        case .member(let object, let property):
+            walkExpression(object)
+            walkExpression(property)
+        
+        case .computedMember(let object, let property):
+            walkExpression(object)
+            walkExpression(property)
+
+        case .destructuring(let destPattern):
+            walkDestructuringPattern(destPattern)
+        }
+
+        walker.postAssignmentTarget(nodeId: targetId, node: target)
+    }
+
+    mutating func walkDestructuringPattern(_ pattern: DestructuringPattern) {
+        let patternId = allocNodeId()
+        _ = walker.preDestructuringPattern(nodeId: patternId, node: pattern)
+
+        switch pattern {
+        case .object(let properties):
+            properties.forEach { walkDestructuringObjectProperty($0) }
+            
+        case .array(let elements):
+            elements.forEach { walkDestructuringArrayPatternElement($0)}
+        case .rest(let target):
+            walkAssignmentTarget(target)
+        
+        case .assignment(let target, let initExpr):
+            walkAssignmentTarget(target)
+            walkExpression(initExpr)
+        
+        case .target(let target):
+            walkAssignmentTarget(target)
+        }
+
+        walker.postDestructuringPattern(nodeId: patternId, node: pattern)
+    }
+
+    mutating func walkDestructuringObjectProperty(_ element: DestructuringObjectProperty) {
+            let elementId = allocNodeId()
+            _ = walker.preDestructingObjectProperty(nodeId: elementId, node: element)
+
+
+        switch element {
+        case .property(let key, let value):
+            walkPropKey(key)
+            walkDestructuringPattern(value)
+        case .rest(let target):
+            walkAssignmentTarget(target)
+        case .shorthand:
+            break
+
+        }
+
+        walker.postDestructingObjectProperty(nodeId: elementId, node: element)
+    }
+
+    mutating func walkPattern(_ pattern: Pattern) {
+
+        let patternId = allocNodeId()
+        _ = walker.prePattern(nodeId: patternId, node: pattern)
+
+
+        switch pattern {
+        case .bindingIdentifier:
+            break
+        
+        case .object(let properties):
+            properties.forEach { walkObjectPatternProperty($0) }
+        
+        case .array(let elements):
+            elements.forEach { walkArrayPatternElement($0) }
+
+        case .rest(let target):
+            walkPattern(target)
+        
+        case .assignment(let target, let initExpr):
+            walkPattern(target)
+            walkExpression(initExpr)
+        }
+
+        walker.postPattern(nodeId: patternId, node: pattern)
+    }
+
+    mutating func walkObjectPatternProperty(_ element: ObjectPatternProperty) {
+        let elementId = allocNodeId()
+        _ = walker.preObjectPatternProperty(nodeId: elementId, node: element)
+
+        switch element {
+        case .property(let key, let value):
+            walkPropKey(key)
+            walkPattern(value)
+        case .rest(let target):
+            walkPattern(target)
+        case .shorthand:
+            break
+
+        }
+
+        walker.postObjectPatternProperty(nodeId: elementId, node: element)
+    }
+
+
+   
+
+    mutating func walkArrayPatternElement(_ element: ArrayPatternElement) {
+        let elementId = allocNodeId()
+        _ = walker.preArrayPatternElement(nodeId: elementId, node: element)
+
+        switch element {
+        case .pattern(let pattern):
+            walkPattern(pattern)
+        case .elision:
+            break
+        }
+        walker.postArrayPatternElement(nodeId: elementId, node: element)
+    }
+
+    mutating func walkDestructuringArrayPatternElement(_ element: DestructuringArrayPatternElement) {
+        let elementId = allocNodeId()
+        _ = walker.preDestructuringArrayPatternElement(nodeId: elementId, node: element)
+
+        switch element {
+        case .pattern(let pattern):
+            walkDestructuringPattern(pattern)
+        case .elision:
+            break
+        }
+        walker.postDestructuringArrayPatternElement(nodeId: elementId, node: element)
     }
 
 

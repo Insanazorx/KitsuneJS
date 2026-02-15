@@ -22,7 +22,7 @@ public indirect enum AssignmentTarget {
 
 public indirect enum DestructuringPattern {
     case object(properties: [DestructuringObjectProperty])
-    case array(elements: [DestructuringPattern?])           // elision için nil
+    case array(elements: [DestructuringArrayPatternElement])           // elision için nil
     case rest(AssignmentTarget)                             // ...target
     case assignment(target: AssignmentTarget, defaultValue: Expression) // target = expr
     case target(AssignmentTarget)                           // leaf target (identifier/member/...) 
@@ -37,7 +37,7 @@ public enum DestructuringObjectProperty {
 public indirect enum Pattern {
     case bindingIdentifier(String)
     case object(properties: [ObjectPatternProperty])
-    case array(elements: [Pattern?])           // elision için nil
+    case array(elements: [ArrayPatternElement])           // elision için nil
     case rest(Pattern)                         // ...x
     case assignment(left: Pattern, defaultValue: Expression)  // x = expr
 }
@@ -57,7 +57,7 @@ public indirect enum Expression {
     case this
 
     case binary(left: Expression, operator_: TokenType, right: Expression)
-    case unary(operator_: TokenType, argument: AssignmentTarget, isPrefix: Bool)
+    case unary(operator_: TokenType, argument: Expression, isPrefix: Bool)
 
     case assignment(left: AssignmentTarget, operator_: TokenType, right: Expression)
 
@@ -69,7 +69,7 @@ public indirect enum Expression {
     case yield(argument: Expression?)
     case await(argument: Expression)
 
-    case arrayLiteral(elements: [Expression])
+    case arrayLiteral(elements: [ArrayElement])  
     case functionExpression(
         name: Expression?,
         params: [Pattern]?,
@@ -90,6 +90,22 @@ public indirect enum Expression {
     case parenthesized(Expression?)
     case objectLiteral(properties: [ObjectProperty])
 
+}
+
+public enum DestructuringArrayPatternElement {
+    case pattern(DestructuringPattern)
+    case elision
+}
+
+public enum ArrayPatternElement {
+    case pattern(Pattern)
+    case elision
+}
+
+public enum ArrayElement {
+  case element(Expression)     // normal
+  case spread(Expression)      // ...expr
+  case elision                 // ,,
 }
 
     public enum ObjectProperty {
@@ -131,7 +147,7 @@ public indirect enum Statement {
     case doWhileStatement(body: Statement, test: Expression)
 
     case forStatement(
-        init: ForInit,
+        init: ForInit?,
         test: Expression?,
         update: Expression?,
         body: Statement
@@ -210,6 +226,12 @@ public enum LexicalKind {
 }
 
 public struct VariableDeclarator {
+
+    public init (id: Pattern, init_: Expression?) {
+        self.id = id
+        self.init_ = init_
+    }
+
     public let id: Pattern
     public let init_: Expression?   // nil => `let c;`
 }
@@ -275,7 +297,7 @@ extension Pattern: CustomStringConvertible {
         case .object(let properties):
             return box("Pattern.object", [boxList("properties", properties.map { $0.toTreeBox() })])
         case .array(let elements):
-            return box("Pattern.array", [boxOptList("elements", elements.map { $0?.toTreeBox() })])
+            return box("Pattern.array", [boxOptList("elements", elements.map { $0.toTreeBox() })])
         case .rest(let pattern):
             return box("Pattern.rest", [pattern.toTreeBox()])
         case .assignment(let left, let defaultValue):
@@ -422,6 +444,41 @@ extension Expression: CustomStringConvertible {
     }
 }
 
+extension ArrayElement {
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .element(let expr):
+            return box("ArrayElement.element", [expr.toTreeBox()])
+        case .spread(let expr):
+            return box("ArrayElement.spread", [expr.toTreeBox()])
+        case .elision:
+            return box("ArrayElement.elision")
+        }
+    }
+}
+
+extension ArrayPatternElement {
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .pattern(let pattern):
+            return box("ArrayPatternElement.pattern", [pattern.toTreeBox()])
+        case .elision:
+            return box("ArrayPatternElement.elision")
+        }
+    }
+}
+
+extension DestructuringArrayPatternElement {
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .pattern(let pattern):
+            return box("DestructuringArrayPatternElement.pattern", [pattern.toTreeBox()])
+        case .elision:
+            return box("DestructuringArrayPatternElement.elision")
+        }
+    }
+}
+
 
 
 // MARK: - Object literal Tree View
@@ -537,7 +594,7 @@ extension Statement: CustomStringConvertible {
 
         case .forStatement(let `init`, let test, let update, let body):
             return box("Statement.for", [
-                boxOpt("init", `init`.toTreeBox()),
+                boxOpt("init", `init`?.toTreeBox()),
                 boxOpt("test", test?.toTreeBox()),
                 boxOpt("update", update?.toTreeBox()),
                 box("body", [body.toTreeBox()])
@@ -801,7 +858,7 @@ extension DestructuringPattern: CustomStringConvertible {
             ])
         case .array(let elements):
             return box("DestructuringPattern.array", [
-                boxOptList("elements", elements.map { $0?.toTreeBox() })
+                boxOptList("elements", elements.map { $0.toTreeBox() })
             ])
         case .rest(let target):
             return box("DestructuringPattern.rest", [target.toTreeBox()])

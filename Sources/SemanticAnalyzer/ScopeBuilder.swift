@@ -85,6 +85,118 @@ extension ScopeBuilder {
 
 
 extension ScopeBuilder: NodeWalker {
+    public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
+        return true
+    }
+
+    public func postArrayElement(nodeId: Int, node: ArrayElement) {
+        
+    }
+
+    public func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
+        return true
+    }
+
+    public func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {
+        
+    }
+
+    public func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
+        return true
+    }
+
+    public func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) {
+        
+    }
+
+    public func preForInit(nodeId: Int, node: ForInit) -> Bool {
+        return true
+    }
+
+    public func postForInit(nodeId: Int, node: ForInit) {
+        
+    }
+
+    public func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
+        return true
+    }
+
+    public func postForEachLeft(nodeId: Int, node: ForEachLeft) {
+        
+    }
+
+    public func prePattern(nodeId: Int, node: Pattern) -> Bool {
+        return true
+    }
+
+    public func postPattern(nodeId: Int, node: Pattern) {
+        
+    }
+
+    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
+        return true
+    }
+
+    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
+        
+    }
+
+    public func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
+        return true
+    }
+
+    public func postPropKey(nodeId: Int, node: PropertyKey) {
+        
+    }
+
+    public func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
+        return true
+    }
+
+    public func postClassElemKey(nodeId: Int, node: ClassElementKey) {
+        
+    }
+
+    public func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
+        return true
+    }
+
+    public func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {
+        
+    }
+
+    public func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
+        return true
+    }
+
+    public func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {
+        
+    }
+
+    public func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
+        return true
+    }
+
+    public func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {
+        
+    }
+
+    public func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
+        return true
+    }
+
+    public func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {
+        
+    }
+
+    public func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
+        return true
+    }
+
+    public func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {
+        
+    }
+
     public func handleProgram(nodeId: Int, node: Program) {
         enterGlobalScope(nodeId: nodeId)
     }

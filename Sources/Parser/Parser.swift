@@ -43,8 +43,7 @@ extension ParserError: CustomStringConvertible {
 
 protocol Parsers {
     // Patterns
-    func parsePattern() throws -> Pattern?
-    func parseAssignmentPattern() throws -> Pattern?
+    func parsePattern(isCallerVariableDeclarator: Bool) throws -> Pattern?
     func parseObjectPattern() throws -> Pattern?
     func parseArrayPattern() throws -> Pattern?
     func parseRestPattern() throws -> Pattern?
@@ -277,11 +276,11 @@ extension Parser : ParserCore {
         let end   = min(tokens.count - 1, index + 5)
 
         for i in start...end {
-            let text = tokens[i].description
+            let text = tokens[i].lexemeAndSpace
             line1 += text + " "
 
             if i == index {
-                line2 += String(repeating: "~", count: text.count) + " "
+                line2 += String(repeating: "~", count: text.count - 1) + "  "
             } else {
                 line2 += String(repeating: " ", count: text.count) + " "
             }
@@ -411,12 +410,15 @@ extension Parser : ParserCore {
                     continue
                 case .updateOp(let unOp) where unOp == .increment || unOp == .decrement:
                     advance();
-                    guard let target = asAssignmentTarget(lhs) else {
+
+                    // NOTE: just a trick for checking whether the lhs is valid for update ops.
+                    guard asAssignmentTarget(lhs) != nil else {
                         throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                     }
+
                     lhs = Expression.unary(
                         operator_: opToken,
-                        argument: target,
+                        argument: lhs,
                         isPrefix: false
                     )
                     continue
@@ -562,8 +564,9 @@ extension Parser : Parsers {
             
             let destPattern: DestructuringPattern = .array(elements: arrPat.map {
                 switch $0 {
-                    case (let value):
-                        
+                    case .element(let value):
+                        fallthrough
+                    case .spread(let value):
                         let dpValue: DestructuringPattern
                         switch value {
                             case .assignment(let left,let op, let right ) where op == .binaryOp(.assign):
@@ -578,7 +581,9 @@ extension Parser : Parsers {
                             default:
                                 dpValue = .target(asAssignmentTarget(value)!)
                         }
-                        return dpValue
+                        return .pattern(dpValue)
+                    case .elision:
+                        return .elision
 
                 }
                 })
@@ -591,11 +596,19 @@ extension Parser : Parsers {
 
     func parseAssignmentTarget() throws -> AssignmentTarget? {
         switch currentToken()?.tokenType {
-            case .leftBracket, .leftBrace:
-                guard let destPattern = try parseDestructuringPattern() else {
-                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-                }
-                return .destructuring(destPattern)
+            case .leftBrace:
+                // IMPORTANT: In an assignment target position, `{...}` is the LHS shape.
+                // Do NOT call `parseDestructuringPattern()` here because that function is allowed
+                // to consume a trailing `= <expr>` as a *default initializer* for nested patterns.
+                // At the top-level LHS, the `=` belongs to the *assignment expression*.
+                let objPat = try parseDestructuringObjectPattern()
+                return .destructuring(objPat)
+
+            case .leftBracket:
+                // Same reasoning as `{}` above.
+                let arrPat = try parseDestructuringArrayPattern()
+                return .destructuring(arrPat)
+
             case .identifier, .this, .new:
                 switch peekToken(aheadBy: 1)?.tokenType {
                     case .dot, .leftBracket, .leftParen: // "super" will be added later.
@@ -628,30 +641,63 @@ extension Parser : Parsers {
 
     func parseDestructuringPattern() throws -> DestructuringPattern? {
         switch currentToken()?.tokenType {
+
         case .leftBrace:
-            return try parseDestructuringObjectPattern()
+            
+            let pat: DestructuringPattern = try parseDestructuringObjectPattern()
+
+            if case .binaryOp(.assign) = currentToken()?.tokenType {
+                advance() // consume '='
+                guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                return .assignment(
+                    target: .destructuring(pat),
+                    defaultValue: defaultValue
+                )
+            }
+
+            return pat
+
         case .leftBracket:
-            return try parseDestructuringArrayPattern()
+            
+            let pat: DestructuringPattern = try parseDestructuringArrayPattern()
+
+            if case .binaryOp(.assign) = currentToken()?.tokenType {
+                advance() // consume '='
+                guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                return .assignment(
+                    target: .destructuring(pat),
+                    defaultValue: defaultValue
+                )
+            }
+
+            return pat
+
         case .spread:
+            
             return try parseDestructuringRestPattern()
+
         default:
             guard let target = try parseAssignmentTarget() else {
                 throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
             }
+
             if case .binaryOp(.assign) = currentToken()?.tokenType {
                 advance() // consume '='
-                guard let defaultValue = try parseExpression(precedence: 0) else {
+                guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-                }                
+                }
                 return .assignment(
                     target: target,
                     defaultValue: defaultValue
                 )
             }
-            return .target(target)
-        
-        }
 
+            return .target(target)
+        }
     }
 
 
@@ -706,18 +752,34 @@ extension Parser : Parsers {
                     value: valueTarget
                 )
             case .identifier(let name):
+
                 if case .colon = peekToken(aheadBy: 1)?.tokenType {
-                    advance() // consume identifier
                     let key: PropertyKey = .identifier(name)
-                    try expect(tokenType: .colon)
-                    guard let valueTarget = try parseDestructuringPattern() else {
+                    advance() // consume identifier
+
+                    try expect(tokenType: .colon) // consume ':'
+                    guard let valueDestPattern = try parseDestructuringPattern() else {
                         throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                     }
-                    return .property(
-                        key: key,
-                        value: valueTarget
-                    )
-                } 
+                    return .property(key: key, value: valueDestPattern)
+                }
+
+                
+                if case .binaryOp(.assign) = peekToken(aheadBy: 1)?.tokenType {
+                    let key: PropertyKey = .identifier(name)
+                    advance() // consume identifier
+
+                    advance() // consume '='
+                    guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
+                        throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                    }
+
+                    let left: AssignmentTarget = .identifier(name)
+                    let assigned: DestructuringPattern = .assignment(target: left, defaultValue: defaultValue)
+                    return .property(key: key, value: assigned)
+                }
+
+                
                 advance() // consume identifier
                 return .shorthand(name)
             default:
@@ -728,11 +790,19 @@ extension Parser : Parsers {
 
     func parseDestructuringArrayPattern() throws -> DestructuringPattern {
         advance() // consume '['
-        var elements: [DestructuringPattern?] = []
+        
+        var elements: [DestructuringArrayPatternElement] = []
         while currentToken()?.tokenType != .rightBracket {
-            let element = try parseDestructuringPattern() 
-                elements.append(element)
             
+            if case .comma = currentToken()?.tokenType {
+                elements.append(.elision)
+                advance() // consume ','
+                continue
+            }    
+            
+            if let element = try parseDestructuringPattern() { 
+                elements.append(.pattern(element))
+            }
 
             if case .comma = currentToken()?.tokenType {
                 advance() // consume ','
@@ -767,6 +837,8 @@ extension Parser : Parsers {
                                 continue
                         }
                     }
+                    
+                    tempIndex += 1
 
                     if case .arrow = tokens[tempIndex].tokenType {
                         return true
@@ -911,7 +983,7 @@ extension Parser : Parsers {
                 return expr;
 
         default:
-            fatalError("Unexpected token in nud expression: \(String(describing: currentToken()))")
+            fatalError("Unexpected token in nud expression: id: \(currentTokenIndex) \(String(describing: currentToken()))")
         }
     }
 
@@ -1001,9 +1073,22 @@ extension Parser : Parsers {
             throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
         }
 
+        if case .updateOp(let updateOp) = op, (updateOp == .increment || updateOp == .decrement) {
+            
+            // same trick used in parseExpression for checking whether the argument is valid for update ops.
+            guard asAssignmentTarget(argument) != nil else {
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+            }
+            return Expression.unary(
+                operator_: op,
+                argument: argument,
+                isPrefix: true
+            )
+        }
+
         return Expression.unary(
             operator_: op,
-            argument: asAssignmentTarget(argument)!,
+            argument: argument,
             isPrefix: true
         )
     }
@@ -1460,29 +1545,34 @@ extension Parser : Parsers {
     func parseArrayLiteral() throws -> Expression? {
         advance() // consume '['
         
-        var elements: [Expression] = []
+        var elements: [ArrayElement] = []
 
         while currentToken()?.tokenType != .rightBracket {
             
             if case .comma = currentToken()?.tokenType {
-                elements.append(.literal(.undefined))
+                elements.append(.elision)
                 advance() // consume ','
                 continue
             }
 
-            if let expr = try parseExpression(precedence: 0, allowComma: false) {
-                elements.append(expr)
+            if case .spread = currentToken()?.tokenType {
+                advance() // consume '...'
+                guard let spreadExpr = try parseExpression(precedence: 0, allowComma: false) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                elements.append(.spread(spreadExpr))
+            } else {
+                if let expr = try parseExpression(precedence: 0, allowComma: false) {
+                    elements.append(.element(expr))
+                }
             }
-
+            
             if case .comma = currentToken()?.tokenType {
                 advance() // consume ','
                 continue
             }
         }
 
-        if peekToken(aheadBy: -1)?.tokenType == .comma {
-            elements.append(.literal(.undefined))
-        }
             
         try expect(tokenType: .rightBracket) // consume ']'
                 
@@ -1497,8 +1587,94 @@ extension Parser : Parsers {
             return Expression.parenthesized(nil)
         }
 
-        let expr = try parseExpression(precedence: 0) // parse inner expression
+        let simulateWhetherInnerIsDestructingPattern: (_ currentIdx: Int, _ tokens: [Token], _ bracketOrBrace: TokenType?) -> Bool
+                 = { currentIdx, tokens, bracketOrBrace in
+                    
+                    var tempIndex = currentIdx
+                    var parenCount = 1
+                    var isBracket = false
 
+                    switch bracketOrBrace {
+                        case .leftBrace:
+                            isBracket = false
+                        case .leftBracket:
+                            isBracket = true
+                        default:
+                            return false
+                    }
+
+                    tempIndex += 1 // consume the first bracket or brace
+
+                    while parenCount > 0 && tempIndex < tokens.count {
+                        tempIndex += 1
+                        if tempIndex >= tokens.count {
+                            return false
+                        }
+
+                        if isBracket {
+                            switch tokens[tempIndex].tokenType {
+                                case .leftBracket:
+                                    parenCount += 1
+                                case .rightBracket:
+                                    parenCount -= 1
+                                default:
+                                    continue
+                            }
+                        } else {
+                            switch tokens[tempIndex].tokenType {
+                                case .leftBrace:
+                                    parenCount += 1
+                                case .rightBrace:
+                                    parenCount -= 1
+                                default:
+                                    continue
+                            }
+                        }
+                    }
+
+                    tempIndex += 1
+                    
+                    if tempIndex >= tokens.count {
+                        return false
+                    }
+
+                    switch tokens[tempIndex].tokenType {
+                        case .binaryOp(.assign):
+                            return true
+                        default:
+                            return false
+                    }
+
+                }
+
+        if simulateWhetherInnerIsDestructingPattern(currentTokenIndex, tokens, currentToken()?.tokenType) {
+            
+            guard let lhsTarget = try parseAssignmentTarget() else {
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+            }
+
+            
+            guard case .binaryOp(.assign) = currentToken()?.tokenType else {
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+            }
+            let op = currentToken()!.tokenType
+            advance() // consume '='
+
+            guard let rhs = try parseExpression(precedence: 0) else {
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+            }
+
+            try expect(tokenType: .rightParen) // consume ')'
+
+            let assignExpr = Expression.assignment(
+                left: lhsTarget,
+                operator_: op!,
+                right: rhs
+            )
+            return .parenthesized(assignExpr)
+        }
+
+        let expr = try parseExpression(precedence: 0) // parse inner expression
         try expect(tokenType: .rightParen) // consume ')' 
         return .parenthesized(expr)
     }
@@ -1923,7 +2099,21 @@ extension Parser : Parsers {
     
         advance()         // consume function name
 
-        try expect(tokenType: .leftParen)   // consume '(' 
+        try expect(tokenType: .leftParen)   // consume '('
+
+        if case .rightParen = currentToken()?.tokenType {
+            advance() // consume ')'
+            guard let body: Statement = try parseBlockStatement() else { // parse function body as BlockStatement
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+            } 
+            return .function(
+                name: name,
+                params: [], 
+                body: body, 
+                isAsync: isAsync, 
+                isGenerator: isGeneratorPresent
+            )
+        }
     
         var args: [Pattern] = []                                                        
         while let param_name = try parsePattern() { // parse parameters            
@@ -2004,7 +2194,19 @@ extension Parser : Parsers {
     }
 
     func parseVariableDeclarator(isInitAllowed: Bool) throws -> VariableDeclarator? {
-        return nil
+
+        guard let id = try parsePattern(isCallerVariableDeclarator: true) else {
+            throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+        }
+
+        var initializer: Expression? = nil
+
+        if case .binaryOp(.assign) = currentToken()?.tokenType {
+            advance() // consume '='
+            initializer = try parseExpression(precedence: 0)
+        }
+
+        return VariableDeclarator(id: id, init_: initializer)
     }
     
     func parseImportDeclaration() throws -> Declaration? {
@@ -2205,8 +2407,11 @@ extension Parser : Parsers {
             var BraceNestingLevel: Int = 0
             
             var virtualIndexState = parser.currentTokenIndex
-                while parser.peekToken(aheadBy: virtualIndexState)?.tokenType != .of && parser.peekToken(aheadBy: virtualIndexState)?.tokenType != .binaryOp(.in) {
-                    switch parser.peekToken(aheadBy: virtualIndexState)?.tokenType {
+            let currentIdx = parser.currentTokenIndex
+                while parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType != .of && parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType != .binaryOp(.in) {
+                    virtualIndexState += 1
+
+                    switch parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType {
                         case .leftParen:
                             ParenNestingLevel += 1
                         case .rightParen:
@@ -2223,7 +2428,8 @@ extension Parser : Parsers {
                             break
                     }
                     if ParenNestingLevel == 0 && BracketNestingLevel == 0 && BraceNestingLevel == 0 {
-                        switch parser.peekToken(aheadBy: virtualIndexState)?.tokenType {
+                        virtualIndexState += 1 
+                        switch parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType {
                             case .of:
                                 return .forOf
                             case .binaryOp(.in):
@@ -2234,7 +2440,8 @@ extension Parser : Parsers {
                                 break;
                         }
                     }
-                    virtualIndexState += 1
+                    
+
                 }
                 fatalError("Should not reach here")
             }(self)
@@ -2527,37 +2734,33 @@ extension Parser : Parsers {
         return .empty
     }
 
-    func parsePattern() throws -> Pattern? {
+    func parsePattern(isCallerVariableDeclarator: Bool = false) throws -> Pattern? {
+        var pat: Pattern?
         switch currentToken()?.tokenType {
             case .leftBracket:
-                return try parseArrayPattern()
+                pat = try parseArrayPattern()
             case .leftBrace:
-                return try parseObjectPattern()
+                pat = try parseObjectPattern()
             case .spread:
-                return try parseRestPattern()
+                pat = try parseRestPattern()
             case .identifier(let name):
-                if case .binaryOp(.assign) = peekToken(aheadBy: 1)?.tokenType {
-                    return try parseAssignmentPattern()// handle object pattern with identifier key
-                }
                 advance() // consume identifier
-                return .bindingIdentifier(name)
+                pat = .bindingIdentifier(name)
             default:
-                fatalError("Should not reach here since parsePattern is only called when current token can start a pattern")
-
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
         }
+        if let pattern = pat, !isCallerVariableDeclarator { // if pattern is in caller position of variable declarator, it cannot be an assignment pattern
+            if case .binaryOp(.assign) = currentToken()?.tokenType {
+                advance() // consume '='
+                guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                return .assignment(left: pattern, defaultValue: defaultValue)
+            }
+        } 
+        return pat
     }
-    func parseAssignmentPattern() throws -> Pattern? {
-        guard let pat = try parsePattern() else {
-            throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-        }
-        try expect(tokenType: .binaryOp(.assign)) // consume '='
-
-        guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
-            throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-        }
-
-        return .assignment(left: pat, defaultValue: defaultValue)
-    }
+    
     func parseObjectPattern() throws -> Pattern? {
         advance() // consume '{'
 
@@ -2582,8 +2785,10 @@ extension Parser : Parsers {
     }
 
     func parseObjectPatternProperty() throws -> ObjectPatternProperty? {
-       
+
         switch currentToken()?.tokenType {
+
+            // Non-identifier keys (literals/this/computed) must be `key : Pattern`
             case .number, .string, .boolean, .null, .undefined, .this, .leftBracket:
                 guard let key = try parsePropertyKey() else {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
@@ -2593,41 +2798,75 @@ extension Parser : Parsers {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                 }
                 return .property(key: key, value: valuePattern)
+
+            // Rest property: `{ ...rest }`
+            // IMPORTANT:
+            // - Do NOT call `parseRestPattern()` here (it would wrap with `Pattern.rest`)
+            // - And do NOT `advance()` twice for the spread token.
             case .spread:
                 advance() // consume '...'
-                guard let argumentPattern = try parseRestPattern() else {
+                // In object binding patterns, the rest target should be a binding identifier.
+                guard let arg = try parsePattern(isCallerVariableDeclarator: true) else {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                 }
-                return .rest(argumentPattern)
+                // Optional strictness: reject non-identifier rest targets for object patterns.
+                guard case .bindingIdentifier = arg else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                return .rest(arg)
 
             case .identifier(let name):
+                
                 if case .colon = peekToken(aheadBy: 1)?.tokenType {
                     let key: PropertyKey = .identifier(name)
-                    
+                    advance() // consume identifier
+
                     try expect(tokenType: .colon) // consume ':'
                     guard let valuePattern = try parsePattern() else {
                         throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                     }
                     return .property(key: key, value: valuePattern)
+                }
 
-                }else if case .identifier(let name) = currentToken()?.tokenType {
+                
+                if case .binaryOp(.assign) = peekToken(aheadBy: 1)?.tokenType {
+                    let key: PropertyKey = .identifier(name)
                     advance() // consume identifier
-                    return .shorthand(name)
-                }   
-                default:
-                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-            }
-        fatalError("Should not reach here since parseObjectPatternProperty")
+
+                    advance() // consume '='
+                    guard let defaultValue = try parseExpression(precedence: 0, allowComma: false) else {
+                        throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                    }
+
+                    let left: Pattern = .bindingIdentifier(name)
+                    let assigned: Pattern = .assignment(left: left, defaultValue: defaultValue)
+                    return .property(key: key, value: assigned)
+                }
+
+                
+                advance() // consume identifier
+                return .shorthand(name)
+
+            default:
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+        }
     }
 
     func parseArrayPattern() throws -> Pattern? {
         advance() // consume '['
 
-        var elements: [Pattern?] = []
+        var elements: [ArrayPatternElement] = []
 
         while currentToken()?.tokenType != .rightBracket {
+            if case .comma = currentToken()?.tokenType {
+                // Elision case: `[ , , a]`
+                elements.append(.elision)
+                advance() // consume ','
+                continue
+            }
+            
             if let element = try parsePattern() {
-                elements.append(element)
+                elements.append(.pattern(element))
             }
 
             if case .comma = currentToken()?.tokenType {
