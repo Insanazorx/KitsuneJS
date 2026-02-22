@@ -1,46 +1,44 @@
 
-
-public struct CompilationUnit {
+public class CompilationUnit {
 
     public let ast: ASTNode
 
+    public var scopes: [Scope] = []
     public var bindings: [Binding] = []
-    public var resolved: [ResolvedRef?] = []
+    public var boundRefs: [BoundRef] = []
     //public var funcCaptures: [[BindingId]] = []
 
     //public var layout: LayoutInfo? = nil
 
-    public init(ast: ASTNode, bindings: [Binding], resolved: [ResolvedRef?]) {
+    public init(ast: ASTNode) {
         self.ast = ast
-        self.bindings = bindings
-        self.resolved = resolved
     }
 }
 
 extension CompilationUnit : CustomStringConvertible {
     public var description: String {
-        return "CompilationUnit(ast: \(ast), bindings: \(bindings), resolved: \(resolved))"
+        return "CompilationUnit(ast: \(ast), bindings: \(bindings), boundRefs: \(boundRefs))"
     }
 }
 
 struct SemanticAnalyzer {
-    public var syntaxTree: ASTNode
     var compilationUnit: CompilationUnit
 
     
     var scopeBuilder: WalkerImpl<ScopeBuilder>
-    var binder: WalkerImpl<Binder>
+    var declBinder: WalkerImpl<DeclBinder>
+    var refBinder: WalkerImpl<RefBinder>
     var resolver: WalkerImpl<Resolver>
 }
 
 extension SemanticAnalyzer {
 
     public init (syntaxTree: ASTNode) {
-        self.syntaxTree = syntaxTree
 
-        self.compilationUnit = CompilationUnit(ast: syntaxTree , bindings: [], resolved: [])
+        self.compilationUnit = CompilationUnit(ast: syntaxTree)
         self.scopeBuilder = WalkerImpl(walker: ScopeBuilder())
-        self.binder = WalkerImpl(walker: Binder())
+        self.declBinder = WalkerImpl(walker: DeclBinder())
+        self.refBinder = WalkerImpl(walker: RefBinder())
         self.resolver = WalkerImpl(walker: Resolver())
     }
 

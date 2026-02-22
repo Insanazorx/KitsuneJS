@@ -1185,10 +1185,10 @@ extension Parser : Parsers {
             advance() // consume '*'
         }
 
-        var name: Expression? = nil
+        var name: Identifier? = nil
 
         if case .identifier(let functionName) = currentToken()?.tokenType {
-            name = Expression.identifier(functionName)
+            name = Identifier.identifier(functionName)
             advance() // consume function name
         }
 
@@ -1246,10 +1246,10 @@ extension Parser : Parsers {
         advance() // consume 'class' keyword
 
         //class expression may have optional name
-        var name: Expression? = nil
+        var name: Identifier? = nil
         
         if case .identifier(let className) = currentToken()?.tokenType {
-            name = Expression.identifier(className)
+            name = Identifier.identifier(className)
             advance() // consume class name
         }
         
@@ -1280,13 +1280,13 @@ extension Parser : Parsers {
         var bodyElements: [ClassElement] = []
 
         while currentToken()?.tokenType != .rightBrace {
-            
             if let element = try parseClassElement() {
                 bodyElements.append(element)
-            } 
-
-            try consumeSemicolon()
-
+            }
+            // NOTE: Do NOT call consumeSemicolon() here.
+            // - Methods/getters/setters/constructor end with `}` (no semicolon).
+            // - Fields and private fields consume their own terminator (see parseClassFieldDefinition).
+            // - Empty class element consumes `;` inside parseClassElement.
         }
 
         try expect(tokenType: .rightBrace) // consume '}'
@@ -2025,20 +2025,14 @@ extension Parser : Parsers {
     }
 
     func parseBlockStatement() throws -> Statement? {
-        
         advance() // consume '{'
-        
         var body: [Statement] = []
         while currentToken()?.tokenType != .rightBrace {
             if let stmt = try parseStatement() {
                 body.append(stmt)
-                try consumeSemicolon();
-            } 
+            }
         }
-
         try expect(tokenType: .rightBrace) // consume '}'
-        
-
         return Statement.block(statements: body)
     }
     
@@ -2051,33 +2045,50 @@ extension Parser : Parsers {
     }
 
     func parseDeclarationStatement(isAsync: Bool) throws -> Statement? {
-        switch  currentToken()?.tokenType {
-            case .function:
-                if let decl = try parseFunctionDeclaration(isAsync: isAsync) {
-                    return Statement.declarationStatement(decl)
-                }
-            case .var:
-                if let decl = try parseVariableDeclaration() {
-                    return Statement.declarationStatement(decl)
-                }
-            case .let, .const:
-                if let decl = try parseLexicalDeclaration() {
-                    return Statement.declarationStatement(decl)
-                }
-            case .import:
-                if let decl = try parseImportDeclaration() {
-                    return Statement.declarationStatement(decl)
-                }
-            case .class:
-                if let decl = try parseClassDeclaration() {
-                    return Statement.declarationStatement(decl)
-                }
-            case .export:
-                if let decl = try parseExportDeclaration() {
-                    return Statement.declarationStatement(decl)
-                }
-            default:
-                break
+        switch currentToken()?.tokenType {
+        case .function:
+            if let decl = try parseFunctionDeclaration(isAsync: isAsync) {
+                // FunctionDeclaration is a statement form; no semicolon required.
+                return .declarationStatement(decl)
+            }
+
+        case .class:
+            if let decl = try parseClassDeclaration() {
+                // ClassDeclaration is a statement form; no semicolon required.
+                return .declarationStatement(decl)
+            }
+
+        case .var:
+            if let decl = try parseVariableDeclaration() {
+                // VariableStatement has an ASI point.
+                try consumeSemicolon()
+                return .declarationStatement(decl)
+            }
+
+        case .let, .const:
+            if let decl = try parseLexicalDeclaration() {
+                // LexicalDeclaration in statement position has an ASI point.
+                try consumeSemicolon()
+                return .declarationStatement(decl)
+            }
+
+        case .import:
+            if let decl = try parseImportDeclaration() {
+                // ImportDeclaration (module item) is terminated by `;` or ASI.
+                try consumeSemicolon()
+                return .declarationStatement(decl)
+            }
+
+        case .export:
+            if let decl = try parseExportDeclaration() {
+                // Many export forms end with `;` or ASI (except `export function/class ...`).
+                // Keep it simple: treat export statements as having an ASI point.
+                try consumeSemicolon()
+                return .declarationStatement(decl)
+            }
+
+        default:
+            break
         }
         return nil
     }
@@ -2095,7 +2106,7 @@ extension Parser : Parsers {
         guard case let .identifier(func_name) = currentToken()?.tokenType else { //get function name
             throw ParserError.unexpectedToken(putErrorOutput(currentTokenIndex))
         }
-        let name = Expression.identifier(func_name)
+        let name = Identifier.identifier(func_name)
     
         advance()         // consume function name
 
@@ -2203,7 +2214,7 @@ extension Parser : Parsers {
 
         if case .binaryOp(.assign) = currentToken()?.tokenType {
             advance() // consume '='
-            initializer = try parseExpression(precedence: 0)
+            initializer = try parseExpression(precedence: 0, allowComma: false)
         }
 
         return VariableDeclarator(id: id, init_: initializer)
@@ -2225,7 +2236,7 @@ extension Parser : Parsers {
             throw ParserError.unexpectedToken(putErrorOutput(currentTokenIndex))
         }
 
-        let name = Expression.identifier(class_name)
+        let name = Identifier.identifier(class_name)
 
         advance() // consume class name
         

@@ -26,6 +26,11 @@ public enum Opcode: Equatable, Hashable {
         public init(rawValue: Int32) { self.rawValue = rawValue }
     }
 
+    public struct FeedbackSlot: Equatable, Hashable, RawRepresentable {
+        public var rawValue: UInt16
+        public init(rawValue: UInt16) { self.rawValue = rawValue }
+    }
+
     public struct U8U16: Equatable, Hashable {
         public var u8: UInt8
         public var u16: UInt16
@@ -114,12 +119,26 @@ public enum Opcode: Equatable, Hashable {
     case cloneObjectLit(_ boilerplate: CPIndex) // "cp"
     case cloneArrayLit(_ boilerplate: CPIndex)  // "cp"
 
+    // MARK: - 5b) Class semantics / super / private
+
+    case loadThis                                            // ""
+    case getSuperPropNamed(_ thisReg: Reg, _ name: CPIndex)  // "reg,cp"
+    case setSuperPropNamed(_ thisReg: Reg, _ name: CPIndex)  // "reg,cp"
+    case getPrivate(_ obj: Reg, _ name: CPIndex)             // "reg,cp"
+    case setPrivate(_ obj: Reg, _ name: CPIndex)             // "reg,cp"
+    case hasPrivate(_ obj: Reg, _ name: CPIndex)             // "reg,cp"
+    case setHomeObject(_ fn: Reg, _ home: Reg)               // "reg,reg"
+
     // MARK: - 6) Property access (IC-like surface)
 
     case getPropNamed(_ obj: Reg, _ name: CPIndex)          // "reg,cp"
     case setPropNamed(_ obj: Reg, _ name: CPIndex)          // "reg,cp"
+    case getPropNamedIC(_ obj: Reg, _ name: CPIndex, _ slot: FeedbackSlot)          // "reg,cp,u16"
+    case setPropNamedIC(_ obj: Reg, _ name: CPIndex, _ slot: FeedbackSlot)          // "reg,cp,u16"
     case definePropNamed(_ obj: Reg, _ name: CPIndex, _ flags: UInt8) // "reg,cp,u8"
     case getPropKeyed(_ obj: Reg, _ key: Reg)               // "reg,reg"
+    case getPropKeyedIC(_ obj: Reg, _ key: Reg, _ slot: FeedbackSlot)               // "reg,reg,u16"
+    case setPropKeyedIC(_ obj: Reg, _ key: Reg, _ slot: FeedbackSlot)               // "reg,reg,u16"
     case setPropKeyed(_ obj: Reg, _ key: Reg)               // "reg,reg"
     case hasProp(_ obj: Reg, _ name: CPIndex)               // "reg,cp"
     case deletePropNamed(_ obj: Reg, _ name: CPIndex)       // "reg,cp"
@@ -173,10 +192,13 @@ public enum Opcode: Equatable, Hashable {
     // MARK: - 10) Calls / construct / spread (ABI mismatch surface)
 
     case call(_ callee: Reg, _ argc: Argc)                            // "reg,argc"
+    case callIC(_ callee: Reg, _ argc: Argc, _ slot: FeedbackSlot)                  // "reg,argc,u16"
     case callMethod(_ obj: Reg, _ name: CPIndex, _ argc: Argc)        // "reg,cp,argc"
+    case callMethodIC(_ obj: Reg, _ name: CPIndex, _ argc: Argc, _ slot: FeedbackSlot) // "reg,cp,argc,u16"
     case callWithThis(_ callee: Reg, _ thisReg: Reg, _ argc: Argc)    // "reg,reg,argc"
     case callSpread(_ callee: Reg, _ argc: Argc, _ spread: Reg)       // "reg,argc,reg"
     case construct(_ ctor: Reg, _ argc: Argc)                         // "reg,argc"
+    case constructIC(_ ctor: Reg, _ argc: Argc, _ slot: FeedbackSlot)               // "reg,argc,u16"
     case constructSpread(_ ctor: Reg, _ argc: Argc, _ spread: Reg)    // "reg,argc,reg"
     case tailCall(_ callee: Reg, _ argc: Argc)                        // "reg,argc"
     case newTarget                                                     // ""

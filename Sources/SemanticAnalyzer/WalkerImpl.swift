@@ -67,13 +67,12 @@ public protocol NodeWalker {
 
 
     mutating func handlePrimary(nodeId: Int, node: Expression)
+    mutating func handleIdentifier(nodeId: Int, name: String, isDecl: Bool)
+
     
-    mutating func specializedScopeBuilderVisit(nodeId: Int, 
+    mutating func specializedParamVisit(nodeId: Int, 
                                                phase: PreOrPost,
                                                mode: CatchOrParam) -> Bool
-
-    associatedtype CompilationComponent
-    func extract() -> CompilationComponent
 
     func printDescription()
 
@@ -113,6 +112,10 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         
         
+    }
+
+    mutating func walkIdentifier(_ identifier: Identifier) {
+        let id = allocNodeId()
     }
 
     mutating func walkStatement(_ stmt: Statement) {
@@ -205,7 +208,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 
                 walkStatement(block)
 
-                _ = walker.specializedScopeBuilderVisit( // for catch clause processing
+                _ = walker.specializedParamVisit( // for catch clause processing
                         nodeId: sid, 
                         phase: .pre,
                         mode: .catch
@@ -222,7 +225,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                     walkStatement(handler)
                 }
 
-                _ = walker.specializedScopeBuilderVisit( // for catch clause processing
+                _ = walker.specializedParamVisit( // for catch clause processing
                         nodeId: sid, 
                         phase: .post,
                         mode: .catch
@@ -338,10 +341,10 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                     _,_):
                 
                 if let name = name {
-                    walkExpression(name)
+                    walkIdentifier(name)
                 }
 
-                _ = walker.specializedScopeBuilderVisit( // for function expression param scope processing
+                _ = walker.specializedParamVisit( // for function expression param scope processing
                         nodeId: eid, 
                         phase: .pre,
                         mode: .param
@@ -353,7 +356,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                     }
                 }
 
-                _ = walker.specializedScopeBuilderVisit( // for function expression param scope processing
+                _ = walker.specializedParamVisit( // for function expression param scope processing
                         nodeId: eid, 
                         phase: .post,
                         mode: .param
@@ -366,7 +369,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                let body):
                 
                 if let name = name {
-                    walkExpression(name)
+                    walkIdentifier(name)
                 }
                 
                 if let superClass = superClass {
@@ -379,7 +382,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                                 let body,
                                 _):
                 
-                _ = walker.specializedScopeBuilderVisit( // for arrow function param scope processing
+                _ = walker.specializedParamVisit( // for arrow function param scope processing
                         nodeId: eid, 
                         phase: .pre,
                         mode: .param
@@ -390,7 +393,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         }
                     }
 
-                _ = walker.specializedScopeBuilderVisit( // for arrow function param scope processing
+                _ = walker.specializedParamVisit( // for arrow function param scope processing
                         nodeId: eid, 
                         phase: .post,
                         mode: .param
@@ -450,11 +453,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                            let body,
                             _,_):
 
-                if let name = name {
-                    walkExpression(name)
-                }
+                
+                walkIdentifier(name)
+                
 
-                _ = walker.specializedScopeBuilderVisit( // for function declaration processing
+                _ = walker.specializedParamVisit( // for function declaration processing
                         nodeId: did, 
                         phase: .pre,
                         mode: .param
@@ -466,7 +469,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                     }
                 }
 
-                _ = walker.specializedScopeBuilderVisit( // for function declaration processing
+                _ = walker.specializedParamVisit( // for function declaration processing
                         nodeId: did, 
                         phase: .post,
                         mode: .param
@@ -475,11 +478,11 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 walkStatement(body)
 
             case .class(let name,
-                                  let superClass,
-                                  let body):
-                if let name = name {
-                    walkExpression(name)
-                }
+                        let superClass,
+                        let body):
+                
+                walkIdentifier(name)
+                
                 
                 if let superClass = superClass {
                     walkExpression(superClass)
@@ -529,7 +532,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                         _,_):
                 walkPropKey(key)
             
-                _ = walker.specializedScopeBuilderVisit( // for method property param scope processing
+                _ = walker.specializedParamVisit( // for method property param scope processing
                         nodeId: opid, 
                         phase: .pre,
                         mode: .param
@@ -541,7 +544,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                     }
                 }
 
-                _ = walker.specializedScopeBuilderVisit( // for method property param scope processing
+                _ = walker.specializedParamVisit( // for method property param scope processing
                         nodeId: opid, 
                         phase: .post,
                         mode: .param
@@ -549,7 +552,8 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
                 walkStatement(body)
             case .shorthand(let key):
-                break;
+                walker.handleIdentifier(nodeId: opid, name: key, isDecl: false)
+                
 
             case .spread(let arg):
                 walkExpression(arg)
@@ -561,7 +565,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
             case .setter(let key, let param, let body):
                 walkPropKey(key)
                 
-                _ = walker.specializedScopeBuilderVisit( // for setter property processing
+                _ = walker.specializedParamVisit( // for setter property processing
                         nodeId: opid, 
                         phase: .pre,
                         mode: .param
@@ -569,7 +573,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
                 walkPattern(param)
 
-                _ = walker.specializedScopeBuilderVisit( // for setter property processing
+                _ = walker.specializedParamVisit( // for setter property processing
                         nodeId: opid, 
                         phase: .post,
                         mode: .param
@@ -588,7 +592,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch element {
             case .constructor(let params, let body):
-                _ = walker.specializedScopeBuilderVisit( 
+                _ = walker.specializedParamVisit( 
                         nodeId: ceid, 
                         phase: .pre,
                         mode: .param
@@ -597,7 +601,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                     params.forEach { walkPattern($0) }
                 }
 
-                _ = walker.specializedScopeBuilderVisit( 
+                _ = walker.specializedParamVisit( 
                         nodeId: ceid, 
                         phase: .post,
                         mode: .param
@@ -615,7 +619,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
                 }
 
                 if !compactParams.isEmpty {
-                    _ = walker.specializedScopeBuilderVisit( 
+                    _ = walker.specializedParamVisit( 
                             nodeId: ceid, 
                             phase: .pre,
                             mode: .param
@@ -623,7 +627,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
                     compactParams.forEach { walkPattern($0) }
 
-                    _ = walker.specializedScopeBuilderVisit( 
+                    _ = walker.specializedParamVisit( 
                             nodeId: ceid, 
                             phase: .post,
                             mode: .param
@@ -644,13 +648,13 @@ public struct WalkerImpl<Walker: NodeWalker> {
             
             case .setter (let key, let param, let body, _):
                 walkClassElemKey(key)
-                _ = walker.specializedScopeBuilderVisit( 
+                _ = walker.specializedParamVisit( 
                         nodeId: ceid, 
                         phase: .pre,
                         mode: .param
                     )
                 walkPattern(param)
-                _ = walker.specializedScopeBuilderVisit( 
+                _ = walker.specializedParamVisit( 
                         nodeId: ceid, 
                         phase: .post,
                         mode: .param
@@ -693,10 +697,12 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
 
         switch key {
-        case .identifier:
-            break
+        case .identifier(let name):
+            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: true)
+            
         case .literal:
             break
+
         case .computed(let value):
             walkExpression(value)
         }
@@ -710,8 +716,8 @@ public struct WalkerImpl<Walker: NodeWalker> {
         _ = walker.preObjectPatternPropertyKey(nodeId: keyId, node: key)
 
         switch key {
-        case .identifier:
-            break
+        case .identifier(let name):
+            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: true)
         case .literal:
             break
         case .computed(let value):
@@ -728,7 +734,8 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch target {
         case .identifier(let name):
-            break;
+            walker.handleIdentifier(nodeId: targetId, name: name, isDecl: false)
+
         case .member(let object, let property):
             walkExpression(object)
             walkExpression(property)
@@ -779,8 +786,9 @@ public struct WalkerImpl<Walker: NodeWalker> {
             walkDestructuringPattern(value)
         case .rest(let target):
             walkAssignmentTarget(target)
-        case .shorthand:
-            break
+        case .shorthand(let name):
+            walker.handleIdentifier(nodeId: elementId, name: name, isDecl: true)
+            
 
         }
 
@@ -794,9 +802,9 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
 
         switch pattern {
-        case .bindingIdentifier:
-            break
-        
+        case .bindingIdentifier(let name):
+            walker.handleIdentifier(nodeId: patternId, name: name, isDecl: true)
+            
         case .object(let properties):
             properties.forEach { walkObjectPatternProperty($0) }
         
@@ -824,8 +832,9 @@ public struct WalkerImpl<Walker: NodeWalker> {
             walkPattern(value)
         case .rest(let target):
             walkPattern(target)
-        case .shorthand:
-            break
+        case .shorthand(let name):
+            walker.handleIdentifier(nodeId: elementId, name: name, isDecl: true)
+
 
         }
 

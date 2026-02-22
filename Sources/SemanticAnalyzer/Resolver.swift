@@ -1,14 +1,7 @@
-public enum RefKind {
-    case Read             // x
-    case Write            // x = 5
-    case ReadWrite        // x += 1, x++
-    case Delete           // delete x
-    case Init             // let x = ... (initializer write, TDZ bypass)
-    case ForInOf          // for (x in obj) / for (x of arr)
-    case Typeof           // typeof x
-}
-
+// RefKind is determined syntactically at binding time (Binder) and then interpreted semantically (Resolver).
+// Keeping it module-global allows both passes to share the same enum.
 public enum Resolution {
+    case unresolved
     case local
     case global
     case module
@@ -16,157 +9,172 @@ public enum Resolution {
     case dynamic          // with / direct eval barrier
 }
 
-public struct ResolvedRef {
-    var kind: RefKind
-    var resolution: Resolution
-    var name: String
-    var depth: Int
-    var binding: Int
-    var isCaptured: Bool
+/// Resolver output is *semantic resolution* and legality checks.
+/// It MUST NOT contain capture or layout addressing (depth/slot/cell).
+
+public enum ResolverDiagnostic {
+    case tdzViolation
+    case illegalConstWrite
+    case unresolvedInStrictMode
+    case illegalDeleteInStrictMode
+    case dynamicScopeBarrier
 }
 
-public struct Resolver {
+
+public class Resolver {
+    
+    var compilationUnit: CompilationUnit? = nil
+    
 
 }
 
 extension Resolver: NodeWalker {
-    public mutating func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
-        return true
-    }
-
-    public mutating func postArrayElement(nodeId: Int, node: ArrayElement) {
+    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
         
     }
 
-    public mutating func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
+    public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
         return true
     }
 
-    public mutating func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {
+    public func postArrayElement(nodeId: Int, node: ArrayElement) {
         
     }
 
-    public mutating func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
+    public func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
         return true
     }
 
-    public mutating func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) {
+    public func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {
         
     }
 
-    public mutating func preForInit(nodeId: Int, node: ForInit) -> Bool {
+    public func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
+        return true
+    }
+
+    public func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) {
+        
+    }
+
+    public func preForInit(nodeId: Int, node: ForInit) -> Bool {
         return true 
     }
 
-    public mutating func postForInit(nodeId: Int, node: ForInit) {
+    public func postForInit(nodeId: Int, node: ForInit) {
         
     }
 
-    public mutating func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
+    public func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
         return true 
     }
 
-    public mutating func postForEachLeft(nodeId: Int, node: ForEachLeft) {
+    public func postForEachLeft(nodeId: Int, node: ForEachLeft) {
         
     }
 
-    public mutating func prePattern(nodeId: Int, node: Pattern) -> Bool {
+    public func prePattern(nodeId: Int, node: Pattern) -> Bool {
         return true
     }
 
-    public mutating func postPattern(nodeId: Int, node: Pattern) {
+    public func postPattern(nodeId: Int, node: Pattern) {
         
     }
 
-    public mutating func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
+    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
         return true 
     }
 
-    public mutating func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
+    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
         
     }
 
-    public mutating func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
+    public func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
         return true
     }
 
-    public mutating func postPropKey(nodeId: Int, node: PropertyKey) {
+    public func postPropKey(nodeId: Int, node: PropertyKey) {
         
     }
 
-    public mutating func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
+    public func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
         return true
     }
 
-    public mutating func postClassElemKey(nodeId: Int, node: ClassElementKey) {
+    public func postClassElemKey(nodeId: Int, node: ClassElementKey) {
         
     }
 
-    public mutating func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
+    public func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
         return true
     }
 
-    public mutating func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {
+    public func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {
         
     }
 
-    public mutating func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
+    public func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
         return true
     }
 
-    public mutating func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {
+    public func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {
         
     }
 
-    public mutating func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
+    public func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
         return true
     }
 
-    public mutating func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {
+    public func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {
         
     }
 
-    public mutating func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
+    public func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
         return true
     }
 
-    public mutating func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {
+    public func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {
         
     }
 
-    public mutating func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
+    public func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
         return true
     }
 
-    public mutating func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {
+    public func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {
         
     }
 
-    public mutating func handleProgram(nodeId: Int, node: Program) {}
+    public func handleProgram(nodeId: Int, node: Program) {}
 
-    public mutating func preStmt(nodeId: Int, node: Statement) -> Bool {return true}
-    public mutating func postStmt(nodeId: Int, node: Statement) {}
+    public func preStmt(nodeId: Int, node: Statement) -> Bool {return true}
+    public func postStmt(nodeId: Int, node: Statement) {}
 
-    public mutating func preExpr(nodeId: Int, node: Expression) -> Bool {return true}
-    public mutating func postExpr(nodeId: Int, node: Expression) {}
+    public func preExpr(nodeId: Int, node: Expression) -> Bool {return true}
+    public func postExpr(nodeId: Int, node: Expression) {}
 
-    public mutating func preDecl(nodeId: Int, node: Declaration) -> Bool { return true}
-    public mutating func postDecl(nodeId: Int, node: Declaration) {}
+    public func preDecl(nodeId: Int, node: Declaration) -> Bool { return true}
+    public func postDecl(nodeId: Int, node: Declaration) {}
 
-    public mutating func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
-    public mutating func postObjProp(nodeId: Int, node: ObjectProperty) {}
+    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
+    public func postObjProp(nodeId: Int, node: ObjectProperty) {}
 
-    public mutating func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
-    public mutating func postClassElem(nodeId: Int, node: ClassElement) {}
+    public func preClassElem(nodeId: Int, node: ClassElement) -> Bool { return true}
+    public func postClassElem(nodeId: Int, node: ClassElement) {}
 
-    public mutating func handlePrimary(nodeId: Int, node: Expression) {}
+    public func handlePrimary(nodeId: Int, node: Expression) {}
 
-    public mutating func specializedScopeBuilderVisit(nodeId: Int, 
+    public func specializedParamVisit(nodeId: Int, 
                                           phase: PreOrPost = .none,
                                           mode: CatchOrParam) -> Bool { return true }
 
-    public typealias CompilationComponent = [ResolvedRef]
-    public func extract() -> CompilationComponent {return []}
+    public typealias CompilationComponent = [BoundRef]
+    public func extract() -> CompilationComponent {
+        // Resolver produces semantic classification + legality diagnostics for each bound ref.
+        // Addressing (depth/slot) is produced later by LayoutManager.
+        // Capture flags are produced later by CaptureAnalyzer.
+        return []
+    }
 
     public func printDescription() {}
 

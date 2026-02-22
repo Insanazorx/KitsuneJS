@@ -22,41 +22,44 @@ public struct Scope {
     var parentId: Int?
     var childIds: [Int]
 
-    var bindings: [Binding] = []
-    var refs: [ResolvedRef] = []
+    var bindings: [Int] = []
+    var boundRefs: [Int] = []
+    
 }
 
 public class ScopeBuilder {
-    private var scopeStack: [Scope] = []
-    private var scopes: [Scope] = []
+
+    var compilationUnit: CompilationUnit? = nil
+
+    private var scopestack: [Scope] = []
     private var funcIdStack: [Int] = []
 }
 
 extension ScopeBuilder {
 
     func createNewScope(nodeId: Int, kind: ScopeKind, ownerFunctionId: Int?) -> Scope {
-        let newScopeId = scopes.count
-        let parentId = scopeStack.last?.id
+        let newScopeId = compilationUnit?.scopes.count ?? -1
+        let parentId = scopestack.last?.id
         let newScope = Scope(id: newScopeId, nodeId: nodeId, kind: kind, ownerFunctionId: ownerFunctionId, parentId: parentId, childIds: [])
         return newScope
     }
 
     private func addChildScope(childId: Int) {
-        if scopeStack.isEmpty {
+        if scopestack.isEmpty {
             fatalError("Cannot add child scope with id \(childId) because there is no parent scope in the stack")
         }
-        guard let parentId = scopeStack.last?.id else { fatalError("No parent scope found for child scope with id \(childId)") }
-        if let index = scopes.firstIndex(where: { $0.id == parentId }) {
-            scopes[index].childIds.append(childId)
+        guard let parentId = scopestack.last?.id else { fatalError("No parent scope found for child scope with id \(childId)") }
+        if let index = compilationUnit?.scopes.firstIndex(where: { $0.id == parentId }) {
+            compilationUnit?.scopes[index].childIds.append(childId)
         } else {
-            fatalError("Parent scope with id \(parentId) not found in scopes list")
+            fatalError("Parent scope with id \(parentId) not found in compilationUnit?.scopes list")
         }
     }
 
     private func enterGlobalScope(nodeId: Int) {
         let globalScope = Scope(id: 0, nodeId: nodeId, kind: .global, ownerFunctionId: nil, parentId: nil, childIds: [])
-        scopes.append(globalScope)
-        scopeStack.append(globalScope)
+        compilationUnit?.scopes.append(globalScope)
+        scopestack.append(globalScope)
     }
    
     private func enterScope(nodeId: Int, kind: ScopeKind) {
@@ -64,12 +67,12 @@ extension ScopeBuilder {
         let newScope = createNewScope(nodeId: nodeId, kind: kind, ownerFunctionId: funcIdStack.last)   
         addChildScope(childId: newScope.id)
 
-        scopes.append(newScope)
-        scopeStack.append(newScope)
+        compilationUnit?.scopes.append(newScope)
+        scopestack.append(newScope)
     }
  
     private func exitScope() {
-        scopeStack.removeLast()
+        scopestack.removeLast()
     }
 
     private func enterFunction(nodeId: Int) {
@@ -85,6 +88,10 @@ extension ScopeBuilder {
 
 
 extension ScopeBuilder: NodeWalker {
+    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
+        
+    }
+
     public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
         return true
     }
@@ -315,7 +322,7 @@ extension ScopeBuilder: NodeWalker {
     public func handlePrimary(nodeId: Int, node: Expression) {}
 
 
-    public func specializedScopeBuilderVisit(nodeId: Int, 
+    public func specializedParamVisit(nodeId: Int, 
                                              phase: PreOrPost = .none,
                                              mode: CatchOrParam) -> Bool {
         switch (phase, mode) {
@@ -333,11 +340,8 @@ extension ScopeBuilder: NodeWalker {
         return true 
     }
 
-    public typealias CompilationComponent = [Scope]
-    public func extract() -> CompilationComponent {return scopes}
-
     public func printDescription() {
-        print (scopes[0].renderDescription(builder: self))
+        print (compilationUnit?.scopes[0].renderDescription(builder: self) ?? "No global scope found")
     }
 
 
@@ -346,7 +350,7 @@ extension ScopeBuilder: NodeWalker {
 extension ScopeBuilder {
     
     public func findScopeById(_ id: Int) -> Scope? {
-        return scopes.first(where: { $0.id == id } )
+        return compilationUnit?.scopes.first(where: { $0.id == id } )
     }
     
 }

@@ -12,7 +12,11 @@ public indirect enum ASTNode {
 public indirect enum Program {
     case program(body: [Statement])
 }
-
+// For func names, class names 
+public enum Identifier {
+    case identifier(String)
+}
+//---------------------------o-----------------------------
 public indirect enum AssignmentTarget {
     case identifier(String)
     case member(object: Expression, property: Expression)
@@ -40,6 +44,11 @@ public indirect enum Pattern {
     case array(elements: [ArrayPatternElement])           // elision için nil
     case rest(Pattern)                         // ...x
     case assignment(left: Pattern, defaultValue: Expression)  // x = expr
+}
+
+public enum DestructuringArrayPatternElement {
+    case pattern(DestructuringPattern)
+    case elision
 }
 
 public enum ObjectPatternProperty {
@@ -71,7 +80,7 @@ public indirect enum Expression {
 
     case arrayLiteral(elements: [ArrayElement])  
     case functionExpression(
-        name: Expression?,
+        name: Identifier?,
         params: [Pattern]?,
         body: Statement,
         isAsync: Bool,
@@ -79,7 +88,7 @@ public indirect enum Expression {
     )
 
     case classExpression(
-        name: Expression?,
+        name: Identifier?,
         superClass: Expression?,
         body: [ClassElement]
     )
@@ -92,10 +101,6 @@ public indirect enum Expression {
 
 }
 
-public enum DestructuringArrayPatternElement {
-    case pattern(DestructuringPattern)
-    case elision
-}
 
 public enum ArrayPatternElement {
     case pattern(Pattern)
@@ -197,7 +202,7 @@ public indirect enum CaseStatement {
 // Declarations
 public indirect enum Declaration {
     case function(
-        name: Expression?,
+        name: Identifier,
         params: [Pattern]?,
         body: Statement, // typically .block
         isAsync: Bool,
@@ -205,7 +210,7 @@ public indirect enum Declaration {
     )
 
     case `class`(
-        name: Expression?,
+        name: Identifier,
         superClass: Expression?,
         body: [ClassElement]
     )
@@ -283,6 +288,17 @@ extension ASTNode: CustomStringConvertible {
             return box("ASTNode.declaration", [decl.toTreeBox()])
         case .program(let prog):
             return box("ASTNode.program", [prog.toTreeBox()])
+        }
+    }
+}
+
+extension Identifier: CustomStringConvertible {
+    public var description: String {renderTree(toTreeBox())}
+
+    fileprivate func toTreeBox() -> TreeBox {
+        switch self {
+        case .identifier(let name):
+            return box("Identifier.identifier(\(name))")
         }
     }
 }
@@ -706,7 +722,7 @@ extension Declaration: CustomStringConvertible {
         switch self {
         case .function(let name, let params, let body, let isAsync, let isGenerator):
             return box("Declaration.function", [
-                boxOpt("name", name?.toTreeBox()),
+                boxOpt("name", name.toTreeBox()),
                 boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
@@ -715,7 +731,7 @@ extension Declaration: CustomStringConvertible {
 
         case .class(let name, let superClass, let body):
             return box("Declaration.class", [
-                boxOpt("name", name?.toTreeBox()),
+                boxOpt("name", name.toTreeBox()),
                 boxOpt("superClass", superClass?.toTreeBox()),
                 boxList("body", body.map { $0.toTreeBox() })
             ])
