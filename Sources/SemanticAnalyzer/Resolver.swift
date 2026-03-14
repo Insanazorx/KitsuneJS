@@ -20,15 +20,40 @@ public enum ResolverDiagnostic {
     case dynamicScopeBarrier
 }
 
+extension ResolverDiagnostic: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .tdzViolation:
+            return "TDZ_Violation"
+        case .illegalConstWrite:
+            return "illegalConstWrite"
+        case .unresolvedInStrictMode:
+            return "unresolvedInStrictMode"
+        case .illegalDeleteInStrictMode:
+            return "illegalDeleteInStrictMode"
+        case .dynamicScopeBarrier:
+            return "dynamicScopeBarrier"
+        }
+    }
+}
+
 
 public class Resolver {
     
-    var compilationUnit: CompilationUnit? = nil
+    var compilationUnit: CompilationUnit
+    
+    public init(_ compilationUnit: CompilationUnit) {
+        self.compilationUnit = compilationUnit
+    }
     
 
 }
 
 extension Resolver: NodeWalker {
+    public func handleBindingIdentifier(nodeId: Int, name: String) {
+    
+    }
+    
     public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
         
     }
@@ -167,16 +192,6 @@ extension Resolver: NodeWalker {
     public func specializedParamVisit(nodeId: Int, 
                                           phase: PreOrPost = .none,
                                           mode: CatchOrParam) -> Bool { return true }
-
-    public typealias CompilationComponent = [BoundRef]
-    public func extract() -> CompilationComponent {
-        // Resolver produces semantic classification + legality diagnostics for each bound ref.
-        // Addressing (depth/slot) is produced later by LayoutManager.
-        // Capture flags are produced later by CaptureAnalyzer.
-        return []
-    }
-
-    public func printDescription() {}
 
 
 }

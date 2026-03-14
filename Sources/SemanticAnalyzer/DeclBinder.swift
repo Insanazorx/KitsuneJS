@@ -34,12 +34,16 @@ public struct Binding {
 
 public class DeclBinder {
     
-    var compilationUnit: CompilationUnit? = nil
+    var compilationUnit: CompilationUnit
     
     var bindingContextStack: [BindingKind] = []
     private var currentBindingId: Int = 0
 
     var scopeCache: Scope? = nil 
+
+    public init(_ compilationUnit: CompilationUnit) {
+        self.compilationUnit = compilationUnit
+    }
 
 }
 
@@ -50,37 +54,7 @@ extension DeclBinder {
         return order
     }
 
-    private func invalidateScopeCache() {
-        scopeCache = nil
-    }
-
-    private func addBindingToScopeByLookingAstId(nodeId: Int, bindingId: Int) {
-        if let cachedScope = scopeCache, cachedScope.nodeId == nodeId {
-            compilationUnit?.scopes[cachedScope.id].bindings.append(bindingId)
-            return
-        }
-
-        if let scopeIndex = compilationUnit?.scopes.firstIndex(where: { $0.nodeId == nodeId }) {
-            compilationUnit?.scopes[scopeIndex].bindings.append(bindingId)
-            scopeCache = compilationUnit?.scopes[scopeIndex]
-        } else {
-            // This should never happen if ScopeBuilder correctly attached scopeIds to all decl nodes.
-            fatalError("DeclBinder: No scope found for decl nodeId \(nodeId)")
-        }
-    }
-
-    private func getScopeIdForNodeId(nodeId: Int) -> Int {
-        if let cachedScope = scopeCache, cachedScope.nodeId == nodeId {
-            return cachedScope.id
-        }
-
-        if let scopeIndex = compilationUnit?.scopes.firstIndex(where: { $0.nodeId == nodeId }) {
-            scopeCache = compilationUnit?.scopes[scopeIndex]
-            return compilationUnit?.scopes[scopeIndex].id ?? -1
-        } else {
-            fatalError("DeclBinder: No scope found for nodeId \(nodeId)")
-        }
-    }
+    
 
     private func enterContext(kind: BindingKind) {
         bindingContextStack.append(kind)
@@ -100,7 +74,7 @@ extension DeclBinder {
 extension DeclBinder {
 func handleFunctionDecl(nodeId: Int, node: Identifier) {
     let bindingId = allocBindingId()
-    let scopeId = getScopeIdForNodeId(nodeId: nodeId)
+    let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
 
     let name = if case .identifier(let name) = node {
         name
@@ -123,14 +97,14 @@ func handleFunctionDecl(nodeId: Int, node: Identifier) {
         is_implicit: false
     )
 
-    compilationUnit?.bindings.append(binding)
-    addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
+    compilationUnit.bindings.append(binding)
+    compilationUnit.addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
 }
 
 func handleClassDecl(nodeId: Int, node: Identifier) {
 
     let bindingId = allocBindingId()
-    let scopeId = getScopeIdForNodeId(nodeId: nodeId)
+    let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
 
     let name = if case .identifier(let name) = node {
         name
@@ -152,8 +126,8 @@ func handleClassDecl(nodeId: Int, node: Identifier) {
         is_implicit: false
     )
 
-    compilationUnit?.bindings.append(binding)
-    addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
+    compilationUnit.bindings.append(binding)
+    compilationUnit.addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
 
 }
 
@@ -173,6 +147,45 @@ func handleExportDecl(nodeId: Int, node: Declaration) {
     
 
 extension DeclBinder: NodeWalker {
+
+    public func handleBindingIdentifier(nodeId: Int, name: String) {
+         // For class and function decl or expr, identifier is handled in its own handler.
+        
+        let kind: BindingKind = if let currentContext = bindingContextStack.last {
+            currentContext
+        } else {    
+            fatalError("BindingIdentifier found outside of any binding context. This should not happen, as BindingIdentifiers should only appear in specific patterns that are handled in their respective handlers.")
+        }
+        
+        if case .none = kind {
+            return // refs are handled in RefBinder, so we can ignore them here.
+        }
+        
+        let bindingId = allocBindingId()
+        let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
+
+        let mutable = kind == .variable || (kind == .lexical(isConst: false))
+        let has_tdz = kind == .class || (kind == .lexical(isConst: true))
+        let is_hoisted = kind == .variable
+
+
+        let binding = Binding(
+            kind: kind,
+            name: name,
+            scopeId: scopeId,
+            declNodeId: nodeId,
+            declOrder: bindingId,
+            mutable: mutable,
+            has_tdz: has_tdz,
+            is_hoisted: is_hoisted,
+            is_global: false, // will be updated later if it's in global scope
+            is_module: false, // will be updated later if it's in module scope
+            is_implicit: false
+        )
+        compilationUnit.bindings.append(binding)
+        compilationUnit.addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
+
+    }
 
 
     public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
@@ -194,8 +207,8 @@ extension DeclBinder: NodeWalker {
         }
         
         let bindingId = allocBindingId()
-        let scopeId = getScopeIdForNodeId(nodeId: nodeId)
-        
+        let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
+
         let mutable = kind == .variable || (kind == .lexical(isConst: false))
         let has_tdz = kind == .class || (kind == .lexical(isConst: true))
         let is_hoisted = kind == .variable
@@ -214,8 +227,8 @@ extension DeclBinder: NodeWalker {
             is_module: false, // will be updated later if it's in module scope
             is_implicit: false
         )
-        compilationUnit?.bindings.append(binding)
-        addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
+        compilationUnit.bindings.append(binding)
+        compilationUnit.addBindingToScopeByLookingAstId(nodeId: nodeId, bindingId: bindingId)
     }
 
     public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
@@ -361,7 +374,18 @@ extension DeclBinder: NodeWalker {
         return true
     }
     public func postDecl(nodeId: Int, node: Declaration) {
-        exitContext()
+        switch node {
+            case .lexical:
+                fallthrough
+            case .variable:
+                fallthrough
+            case .importDecl:
+                fallthrough // import declarations don't create bindings in the current scope, so no need to exit context
+            case .exportDecl:
+                exitContext()
+            default:
+                break
+        }
     }
 
     public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { return true}
@@ -390,10 +414,6 @@ extension DeclBinder: NodeWalker {
         }
         return true 
     }
-
-
-
-    public func printDescription() {}
 
 
 }

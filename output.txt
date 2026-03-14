@@ -1,0 +1,59 @@
+Scope 0
+├─ kind: global
+├─ bindings
+│  ├─ Binding 0
+│  │  ├─ name: innerBlockFn
+│  │  └─ kind: function
+│  └─ Binding 7
+│     ├─ name: a
+│     └─ kind: lexical(isConst: false)
+├─ boundRefs
+│  └─ <empty>
+└─ children
+   └─ Scope 1
+      ├─ kind: function
+      ├─ bindings
+      │  └─ <empty>
+      ├─ boundRefs
+      │  └─ BoundRef 0 not found
+      └─ children
+         ├─ Scope 2
+         │  ├─ kind: param
+         │  ├─ bindings
+         │  │  ├─ Binding 1
+         │  │  │  ├─ name: p
+         │  │  │  └─ kind: param
+         │  │  ├─ Binding 2
+         │  │  │  ├─ name: x
+         │  │  │  └─ kind: param
+         │  │  └─ Binding 3
+         │  │     ├─ name: y
+         │  │     └─ kind: param
+         │  ├─ boundRefs
+         │  │  └─ <empty>
+         │  └─ children
+         │     └─ <empty>
+         └─ Scope 3
+            ├─ kind: block
+            ├─ bindings
+            │  ├─ Binding 4
+            │  │  ├─ name: innerVar
+            │  │  └─ kind: variable
+            │  ├─ Binding 5
+            │  │  ├─ name: innerVar2
+            │  │  └─ kind: variable
+            │  └─ Binding 6
+            │     ├─ name: innerConst
+            │     └─ kind: lexical(isConst: true)
+            ├─ boundRefs
+            │  ├─ BoundRef 1 not found
+            │  ├─ BoundRef 2 not found
+            │  ├─ BoundRef 3
+            │  │  ├─ name: innerBlockFn
+            │  │  ├─ kind: Read
+            │  │  └─ bindingId: nil
+            │  ├─ BoundRef 4 not found
+            │  ├─ BoundRef 5 not found
+            │  └─ BoundRef 6 not found
+            └─ children
+               └─ <empty>

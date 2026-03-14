@@ -68,20 +68,19 @@ public protocol NodeWalker {
 
     mutating func handlePrimary(nodeId: Int, node: Expression)
     mutating func handleIdentifier(nodeId: Int, name: String, isDecl: Bool)
+    mutating func handleBindingIdentifier(nodeId: Int, name: String)
 
     
     mutating func specializedParamVisit(nodeId: Int, 
                                                phase: PreOrPost,
                                                mode: CatchOrParam) -> Bool
 
-    func printDescription()
-
     
 }
 
 public struct WalkerImpl<Walker: NodeWalker> {
 
-    public init(walker: Walker) {
+    public init(_ walker: Walker) {
         self.nextNodeId = 0
         self.walker = walker
     }
@@ -116,6 +115,9 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
     mutating func walkIdentifier(_ identifier: Identifier) {
         let id = allocNodeId()
+        if case .identifier(let name) = identifier {
+            walker.handleIdentifier(nodeId: id, name: name, isDecl: false)
+        }
     }
 
     mutating func walkStatement(_ stmt: Statement) {
@@ -698,7 +700,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch key {
         case .identifier(let name):
-            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: true)
+            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: false)
             
         case .literal:
             break
@@ -717,7 +719,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch key {
         case .identifier(let name):
-            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: true)
+            walker.handleIdentifier(nodeId: keyId, name: name, isDecl: false)
         case .literal:
             break
         case .computed(let value):
@@ -776,13 +778,13 @@ public struct WalkerImpl<Walker: NodeWalker> {
     }
 
     mutating func walkDestructuringObjectProperty(_ element: DestructuringObjectProperty) {
-            let elementId = allocNodeId()
-            _ = walker.preDestructingObjectProperty(nodeId: elementId, node: element)
+        let elementId = allocNodeId()
+        _ = walker.preDestructingObjectProperty(nodeId: elementId, node: element)
 
 
         switch element {
         case .property(let key, let value):
-            walkPropKey(key)
+            walkObjPropKey(key)
             walkDestructuringPattern(value)
         case .rest(let target):
             walkAssignmentTarget(target)
@@ -803,7 +805,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch pattern {
         case .bindingIdentifier(let name):
-            walker.handleIdentifier(nodeId: patternId, name: name, isDecl: true)
+            walker.handleBindingIdentifier(nodeId: patternId, name: name)
             
         case .object(let properties):
             properties.forEach { walkObjectPatternProperty($0) }
@@ -828,7 +830,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
 
         switch element {
         case .property(let key, let value):
-            walkPropKey(key)
+            walkObjPropKey(key)
             walkPattern(value)
         case .rest(let target):
             walkPattern(target)
@@ -870,11 +872,6 @@ public struct WalkerImpl<Walker: NodeWalker> {
         walker.postDestructuringArrayPatternElement(nodeId: elementId, node: element)
     }
 
-
-
-    func printDescription(){
-        walker.printDescription()
-    }
             
             
 }

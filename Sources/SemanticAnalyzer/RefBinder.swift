@@ -25,14 +25,15 @@ public struct BoundRef {
 
 public class RefBinder {
 
-    var compilationUnit: CompilationUnit? = nil
+    var compilationUnit: CompilationUnit
 
     var refContextStack: [RefKind] = []
     private var currentBindingId: Int = 0
-    
-    var scopeCache: Scope? = nil  
-    var bindingCache: Binding? = nil 
 
+    public init(_ compilationUnit: CompilationUnit) {
+        self.compilationUnit = compilationUnit
+    }
+    
     
 }
 
@@ -44,84 +45,6 @@ extension RefBinder {
         return order
     }
 
-    private func invalidateScopeCache() {
-        scopeCache = nil
-    }
-
-    private func addBindingToScopeByLookingAstId(nodeId: Int, bindingId: Int) {
-        if let cachedScope = scopeCache, cachedScope.nodeId == nodeId {
-            compilationUnit?.scopes[cachedScope.id].bindings.append(bindingId)
-            return
-        }
-
-        if let scopeIndex = compilationUnit?.scopes.firstIndex(where: { $0.nodeId == nodeId }) {
-            compilationUnit?.scopes[scopeIndex].bindings.append(bindingId)
-            scopeCache = compilationUnit?.scopes[scopeIndex]
-        } else {
-            // This should never happen if ScopeBuilder correctly attached scopeIds to all decl nodes.
-            fatalError("DeclBinder: No scope found for decl nodeId \(nodeId)")
-        }
-    }
-
-    private func getScopeIdForNodeId(nodeId: Int) -> Int {
-        if let cachedScope = scopeCache, cachedScope.nodeId == nodeId {
-            return cachedScope.id
-        }
-
-        if let scopeIndex = compilationUnit?.scopes.firstIndex(where: { $0.nodeId == nodeId }) {
-            scopeCache = compilationUnit?.scopes[scopeIndex]
-            return compilationUnit?.scopes[scopeIndex].id ?? -1
-        } else {
-            fatalError("DeclBinder: No scope found for nodeId \(nodeId)")
-        }
-    }
-
-    private func addRefToScopeByLookingAstId(nodeId: Int, refId: Int) {
-        if let cachedScope = scopeCache, cachedScope.nodeId == nodeId {
-            compilationUnit?.scopes[cachedScope.id].boundRefs.append(refId)
-            return
-        }
-
-        if let scopeIndex = compilationUnit?.scopes.firstIndex(where: { $0.nodeId == nodeId }) {
-            compilationUnit?.scopes[scopeIndex].boundRefs.append(refId)
-            scopeCache = compilationUnit?.scopes[scopeIndex]
-        } else {
-            fatalError("DeclBinder: No scope found for ref nodeId \(nodeId)")
-        }
-    }
-
-    private func getBindingIdByName(name: String, scopeId: Int) -> Int? {
-        
-        //First check cache
-        if let cachedBinding = bindingCache, cachedBinding.name == name, cachedBinding.scopeId == scopeId {
-            return cachedBinding.declOrder
-        } 
-
-        // If cache miss, look up in 
-        else if let cachedScope = scopeCache, cachedScope.id == scopeId {
-            if let bindingId = cachedScope.bindings.first(where: { bindingId in
-                if let binding = compilationUnit?.bindings.first(where: { $0.declOrder == bindingId }) {
-                    return binding.name == name && binding.scopeId == scopeId
-                }
-                return false
-            }) {
-                bindingCache = compilationUnit?.bindings.first(where: { $0.declOrder == bindingId })
-                return bindingId
-            }
-        }
-
-        else if let bindingIndex = compilationUnit?.bindings.firstIndex(where: { $0.name == name && $0.scopeId == scopeId }) {
-            bindingCache = compilationUnit?.bindings[bindingIndex]
-            return compilationUnit?.bindings[bindingIndex].declOrder
-        } 
-        else {
-            return nil
-        }
-        fatalError("VERIFY NOT REACHED: getBindingIdByName should have returned by now")
-    } 
-
-
-
 
     private func enterContext(kind: RefKind) {
         refContextStack.append(kind)
@@ -131,18 +54,15 @@ extension RefBinder {
     private func exitContext() {
         refContextStack.removeLast()
     }
-
-
-
-
-
 }
     
 
-
-
-
 extension RefBinder: NodeWalker {
+
+    public func handleBindingIdentifier(nodeId: Int, name: String) {
+
+    }
+
     public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
         if isDecl {
             // Declarations are handled in DeclBinder, so we can ignore them here.
@@ -156,8 +76,8 @@ extension RefBinder: NodeWalker {
         }
 
         let refId = allocBindingId()
-        let scopeId = getScopeIdForNodeId(nodeId: nodeId)
-        let bindingId = getBindingIdByName(name: name, scopeId: scopeId)
+        let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
+        let bindingId = compilationUnit.getBindingIdByName(name: name, scopeId: scopeId)
         let boundRef = BoundRef(
             refNodeId: nodeId,
             name: name,
@@ -168,15 +88,13 @@ extension RefBinder: NodeWalker {
             diagnostics: [] // Will be filled during resolution in Resolver phase
         )
 
-        compilationUnit?.boundRefs.append(boundRef)
-        addRefToScopeByLookingAstId(nodeId: nodeId, refId: refId)
+        compilationUnit.boundRefs.append(boundRef)
+        compilationUnit.addRefToScopeByLookingAstId(nodeId: nodeId, refId: refId)
 
     }
 
     public func preExpr(nodeId: Int, node: Expression) -> Bool {
         switch node {
-        case .literal, .this:
-            break
         case .identifier(let name):
             handleIdentifier(nodeId: nodeId, name: name, isDecl: false)
         case .privateIdentifier(let name):
@@ -212,8 +130,25 @@ extension RefBinder: NodeWalker {
     }
     public func postExpr(nodeId: Int, node: Expression) {
         switch node {
-            default:
+                
+            case .assignment:
+                fallthrough
+            case .binary:
                 exitContext()
+            case .binary (_, let op, _)
+                where op == .binaryOp(.plusAssign) || op == .binaryOp(.minusAssign) || op == .binaryOp(.multiplyAssign) || op == .binaryOp(.divideAssign) :
+                exitContext()
+            case .unary (let op,_,_)
+                where op == .updateOp(.increment) || op == .updateOp(.decrement):
+                fallthrough
+            case .unary (let op,_,_)
+                where op == .unaryOp(.delete):
+                fallthrough
+            case .unary (let op,_,_)
+                where op == .unaryOp(.typeof):
+                exitContext()
+            default:
+                break;
         }
         
     }
@@ -363,8 +298,6 @@ extension RefBinder: NodeWalker {
     public func specializedParamVisit(nodeId: Int, 
                                              phase: PreOrPost = .none,
                                              mode: CatchOrParam) -> Bool { return true }
-
-    public func printDescription() {}
 
 
 }

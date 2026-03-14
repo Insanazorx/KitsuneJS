@@ -29,16 +29,20 @@ public struct Scope {
 
 public class ScopeBuilder {
 
-    var compilationUnit: CompilationUnit? = nil
+    var compilationUnit: CompilationUnit
 
     private var scopestack: [Scope] = []
     private var funcIdStack: [Int] = []
+
+    public init(_ compilationUnit: CompilationUnit) {
+        self.compilationUnit = compilationUnit
+    }
 }
 
 extension ScopeBuilder {
 
     func createNewScope(nodeId: Int, kind: ScopeKind, ownerFunctionId: Int?) -> Scope {
-        let newScopeId = compilationUnit?.scopes.count ?? -1
+        let newScopeId = compilationUnit.scopes.count
         let parentId = scopestack.last?.id
         let newScope = Scope(id: newScopeId, nodeId: nodeId, kind: kind, ownerFunctionId: ownerFunctionId, parentId: parentId, childIds: [])
         return newScope
@@ -49,16 +53,16 @@ extension ScopeBuilder {
             fatalError("Cannot add child scope with id \(childId) because there is no parent scope in the stack")
         }
         guard let parentId = scopestack.last?.id else { fatalError("No parent scope found for child scope with id \(childId)") }
-        if let index = compilationUnit?.scopes.firstIndex(where: { $0.id == parentId }) {
-            compilationUnit?.scopes[index].childIds.append(childId)
+        if let index = compilationUnit.scopes.firstIndex(where: { $0.id == parentId }) {
+            compilationUnit.scopes[index].childIds.append(childId)
         } else {
-            fatalError("Parent scope with id \(parentId) not found in compilationUnit?.scopes list")
+            fatalError("Parent scope with id \(parentId) not found in compilationUnit.scopes list")
         }
     }
 
     private func enterGlobalScope(nodeId: Int) {
         let globalScope = Scope(id: 0, nodeId: nodeId, kind: .global, ownerFunctionId: nil, parentId: nil, childIds: [])
-        compilationUnit?.scopes.append(globalScope)
+        compilationUnit.scopes.append(globalScope)
         scopestack.append(globalScope)
     }
    
@@ -67,8 +71,10 @@ extension ScopeBuilder {
         let newScope = createNewScope(nodeId: nodeId, kind: kind, ownerFunctionId: funcIdStack.last)   
         addChildScope(childId: newScope.id)
 
-        compilationUnit?.scopes.append(newScope)
+        compilationUnit.scopes.append(newScope)
         scopestack.append(newScope)
+
+        
     }
  
     private func exitScope() {
@@ -83,132 +89,27 @@ extension ScopeBuilder {
         funcIdStack.removeLast()
     }
 
+    private func AddToScope(nodeId: Int) {
+        compilationUnit.nodeIdToScopeId.append(scopestack.last?.id ?? -1) //TODO: handle this case properly
+    }
 }
 
 
 
 extension ScopeBuilder: NodeWalker {
-    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
-        
+
+    public func handleBindingIdentifier(nodeId: Int, name: String) {
+
     }
 
-    public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
-        return true
-    }
-
-    public func postArrayElement(nodeId: Int, node: ArrayElement) {
-        
-    }
-
-    public func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
-        return true
-    }
-
-    public func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {
-        
-    }
-
-    public func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
-        return true
-    }
-
-    public func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) {
-        
-    }
-
-    public func preForInit(nodeId: Int, node: ForInit) -> Bool {
-        return true
-    }
-
-    public func postForInit(nodeId: Int, node: ForInit) {
-        
-    }
-
-    public func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
-        return true
-    }
-
-    public func postForEachLeft(nodeId: Int, node: ForEachLeft) {
-        
-    }
-
-    public func prePattern(nodeId: Int, node: Pattern) -> Bool {
-        return true
-    }
-
-    public func postPattern(nodeId: Int, node: Pattern) {
-        
-    }
-
-    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
-        return true
-    }
-
-    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
-        
-    }
-
-    public func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
-        return true
-    }
-
-    public func postPropKey(nodeId: Int, node: PropertyKey) {
-        
-    }
-
-    public func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
-        return true
-    }
-
-    public func postClassElemKey(nodeId: Int, node: ClassElementKey) {
-        
-    }
-
-    public func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
-        return true
-    }
-
-    public func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {
-        
-    }
-
-    public func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
-        return true
-    }
-
-    public func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {
-        
-    }
-
-    public func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
-        return true
-    }
-
-    public func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {
-        
-    }
-
-    public func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
-        return true
-    }
-
-    public func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {
-        
-    }
-
-    public func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
-        return true
-    }
-
-    public func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {
-        
-    }
-
+    
     public func handleProgram(nodeId: Int, node: Program) {
         enterGlobalScope(nodeId: nodeId)
+        AddToScope(nodeId: nodeId)
     }
 
     public func preStmt(nodeId: Int, node: Statement) -> Bool {
+        AddToScope(nodeId: nodeId)
         switch node {
             case .block:
                 enterScope(nodeId: nodeId, kind: .block)
@@ -228,6 +129,7 @@ extension ScopeBuilder: NodeWalker {
     }
 
     public func preExpr(nodeId: Int, node: Expression) -> Bool {
+        AddToScope(nodeId: nodeId)
         switch node {
             case .functionExpression, .arrowFunction:
                 enterScope(nodeId: nodeId, kind: .function)
@@ -254,6 +156,7 @@ extension ScopeBuilder: NodeWalker {
         }
     }
     public func preDecl(nodeId: Int, node: Declaration) -> Bool { 
+        AddToScope(nodeId: nodeId)
         switch node {
             case .function:
                 enterScope(nodeId: nodeId, kind: .function)
@@ -277,7 +180,8 @@ extension ScopeBuilder: NodeWalker {
         }
     }
 
-    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool { 
+    public func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool {
+        AddToScope(nodeId: nodeId) 
         switch node {
             case .method, .getter, .setter:
                 enterScope(nodeId: nodeId, kind: .function)
@@ -299,6 +203,7 @@ extension ScopeBuilder: NodeWalker {
     }
 
     public func preClassElem(nodeId: Int, node: ClassElement) -> Bool { 
+        AddToScope(nodeId: nodeId)
         switch node {
             case .constructor, .member, .getter, .setter:
                 enterScope(nodeId: nodeId, kind: .function)
@@ -310,6 +215,7 @@ extension ScopeBuilder: NodeWalker {
         return true
     }
     public func postClassElem(nodeId: Int, node: ClassElement) {
+        
         switch node {
             case .constructor, .member, .getter, .setter:
                 exitScope()
@@ -340,47 +246,149 @@ extension ScopeBuilder: NodeWalker {
         return true 
     }
 
-    public func printDescription() {
-        print (compilationUnit?.scopes[0].renderDescription(builder: self) ?? "No global scope found")
-    }
-
-
-}
-
-extension ScopeBuilder {
     
-    public func findScopeById(_ id: Int) -> Scope? {
-        return compilationUnit?.scopes.first(where: { $0.id == id } )
-    }
-    
-}
 
-extension Scope {
-    
-    // Since scope tree is meaningful only in the context of the entire scope builder, 
-    // we need to pass the builder as it is not designed as a tree node structure but id based table.
 
-    public func renderDescription(builder: ScopeBuilder) -> String {
-        return renderTree(
-            toTreeBox(builder: builder) 
-        )
-    }
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
+        AddToScope(nodeId: nodeId)
         
-
-    public func toTreeBox(builder: ScopeBuilder) -> TreeBox {
-        box("Scope \(id)", [
-            box("nodeId: \(nodeId)"),
-            box("kind: \(kind)"),
-            box("ownerFunctionId: \(ownerFunctionId.map(String.init) ?? "nil")"),
-            box("parentId: \(parentId.map(String.init) ?? "nil")"),
-            boxList("children", 
-                childIds.map {childId in 
-                    builder
-                        .findScopeById(childId)?
-                        .toTreeBox(builder: builder) 
-                        ?? box("Scope \(childId) not found")
-                }
-            )
-        ])
     }
+
+    public func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postArrayElement(nodeId: Int, node: ArrayElement) {
+        
+    }
+
+    public func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {
+        
+    }
+
+    public func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) {
+        
+    }
+
+    public func preForInit(nodeId: Int, node: ForInit) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postForInit(nodeId: Int, node: ForInit) {
+        
+    }
+
+    public func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postForEachLeft(nodeId: Int, node: ForEachLeft) {
+        
+    }
+
+    public func prePattern(nodeId: Int, node: Pattern) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postPattern(nodeId: Int, node: Pattern) {
+        
+    }
+
+    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
+        
+    }
+
+    public func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postPropKey(nodeId: Int, node: PropertyKey) {
+        
+    }
+
+    public func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postClassElemKey(nodeId: Int, node: ClassElementKey) {
+        
+    }
+
+    public func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {
+        
+    }
+
+    public func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {
+        
+    }
+
+    public func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {
+        
+    }
+
+    public func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {
+        
+    }
+
+    public func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
+        AddToScope(nodeId: nodeId)
+        return true
+    }
+
+    public func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {
+        
+    }
+
 }
+
