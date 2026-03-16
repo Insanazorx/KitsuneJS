@@ -12,6 +12,7 @@ public class CompilationUnit {
     public var boundRefCache: BoundRef? = nil
 
     public var nodeIdToScopeId: [Int] = []
+    public var nodeIdToNode: [AnyNode] = []
     
 
     public init(ast: ASTNode) {
@@ -42,8 +43,8 @@ extension CompilationUnit {
     }
 
 
-    func addRefToScopeByLookingAstId(nodeId: Int, refId: Int) {
-        scopes[nodeIdToScopeId[nodeId]].boundRefs.append(refId)
+    func addRefToScopeByLookingAstId(nodeId: Int) { // refId
+        scopes[nodeIdToScopeId[nodeId]].boundRefs.append(nodeId)
     }
 
     func getBindingIdByName(name: String, scopeId: Int) -> Int? {
@@ -65,6 +66,11 @@ extension CompilationUnit {
                 return bindingId
             }
         }
+
+        // If in same function scope, look up in params scope as well
+        // because both params and body bindings are visible in the entire function body.
+        
+        /*...*/
 
         else if let bindingIndex = bindings.firstIndex(where: { $0.name == name && $0.scopeId == scopeId }) {
             bindingCache = bindings[bindingIndex]
@@ -96,8 +102,10 @@ extension Scope {
     }
 
     public func toTreeBoxSimplified(CompilationUnit: CompilationUnit) -> TreeBox {
+        
         box("Scope \(id)", [
             box("kind: \(kind)"),
+            box("ownerFunction: " + (ownerFunctionId.map(String.init) ?? "nil")),
             boxList("bindings", 
                 bindings.map {bindingId in 
                     CompilationUnit
@@ -197,6 +205,9 @@ extension BoundRef {
                 box("name: \(name)"),
                 box("kind: \(kind)"),
                 box("bindingId: \(bindingId.map(String.init) ?? "nil")"),
+                box("captureDepth: \(capturingDepth)"),
+                box("storageKind: \(storageKind)"),
+
             ])
         }
 
@@ -207,6 +218,8 @@ extension BoundRef {
             box("bindingId: \(bindingId.map(String.init) ?? "nil")"),
             box("refScopeId: \(refScopeId)"),
             box("isCaptured: \(isCaptured)"),
+            box("captureDepth: \(capturingDepth)"),
+            box("storageKind: \(storageKind)"),
             box("resolution: \(resolution)"),
             box("diagnostics: [\(diagnostics.map { $0.description }.joined(separator: ", "))]")
         ])

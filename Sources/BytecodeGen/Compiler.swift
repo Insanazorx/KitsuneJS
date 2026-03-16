@@ -1,5 +1,16 @@
 class BytecodeCompiler {
-    func compile(ast: ASTNode) {
-        // Compilation logic here
+    var compilationUnit: CompilationUnit
+    var bytecodeCompilation: [Bytecode] = []
+    init(compilationUnit: CompilationUnit) {
+        self.compilationUnit = compilationUnit
+    }
+}
+
+extension BytecodeCompiler {
+    func compileProgram(){
+
+    } 
+    func compileStatement(_ statement: Statement) {
+        
     }
 }

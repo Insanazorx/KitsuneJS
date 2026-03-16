@@ -25,8 +25,8 @@ func main() {
       
       print ("-----------------------------------")
       
-      var astLineerizer = WalkerImpl(ASTLineerizer(ast: ast));
       let compilationUnit = CompilationUnit(ast: ast);
+      var astLineerizer = WalkerImpl(ASTLineerizer(ast: ast, compilationUnit: compilationUnit));
       var scopeBuilder = WalkerImpl(ScopeBuilder(compilationUnit));
       var declBinder = WalkerImpl(DeclBinder(compilationUnit));
       var refBinder = WalkerImpl(RefBinder(compilationUnit));

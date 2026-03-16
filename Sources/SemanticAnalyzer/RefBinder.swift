@@ -6,10 +6,16 @@ public enum RefKind {
     case ForInOf          // for (x in obj) / for (x of arr)
     case Typeof           // typeof x
 }
-/// Binder output for every identifier-like usage site.
-/// This is *structural binding* (lookup result), not semantic legality.
+
+public enum StorageKind {
+    case unknown
+    case lexical
+    case context
+    case global
+}
+
 public struct BoundRef {
-    /// The nodeId of the identifier token/site in the AST.
+    
     public var refNodeId: Int
     public var name: String
     public var kind: RefKind
@@ -19,6 +25,10 @@ public struct BoundRef {
     public var refScopeId: Int
     
     public var isCaptured: Bool = false
+    public var capturingDepth: Int = 0 // 0 means not captured, >0 means captured and the number indicates how many scopes away the declaration is.
+    
+    public var storageKind: StorageKind = .unknown // Will be updated during resolution in Resolver phase
+
     public var resolution: Resolution
     public var diagnostics: [ResolverDiagnostic]
 }
@@ -75,7 +85,6 @@ extension RefBinder: NodeWalker {
             .Read // Default to Read if we are not in any specific context. This is a common case for simple identifier usage.
         }
 
-        let refId = allocBindingId()
         let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
         let bindingId = compilationUnit.getBindingIdByName(name: name, scopeId: scopeId)
         let boundRef = BoundRef(
@@ -89,7 +98,7 @@ extension RefBinder: NodeWalker {
         )
 
         compilationUnit.boundRefs.append(boundRef)
-        compilationUnit.addRefToScopeByLookingAstId(nodeId: nodeId, refId: refId)
+        compilationUnit.addRefToScopeByLookingAstId(nodeId: nodeId)
 
     }
 

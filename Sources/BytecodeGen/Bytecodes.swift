@@ -1,4 +1,4 @@
-public enum Opcode: Equatable, Hashable {
+public enum Bytecode: Equatable, Hashable {
     // MARK: - Operand building blocks 
 
     public struct Reg: Equatable, Hashable, RawRepresentable {

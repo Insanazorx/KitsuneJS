@@ -1,9 +1,35 @@
+public enum AnyNode {
+    case program(Program)
+    case statement(Statement)
+    case expression(Expression)
+    case declaration(Declaration)
+    case objectProperty(ObjectProperty)
+    case classElement(ClassElement)
+    case forInit(ForInit)
+    case forEachLeft(ForEachLeft)
+    case pattern(Pattern)
+    case assignmentTarget(AssignmentTarget)
+    case propKey(PropertyKey)
+    case classElemKey(ClassElementKey)
+    case destructuringPattern(DestructuringPattern)
+    case destructuringObjectProperty(DestructuringObjectProperty)
+    case objectPatternProperty(ObjectPatternProperty)
+    case variableDeclarator(VariableDeclarator)
+    case arrayElement(ArrayElement)
+    case arrayPatternElement(ArrayPatternElement)
+    case destructuringArrayPatternElement(DestructuringArrayPatternElement)
+    case identifier(Identifier)
+
+}
+
 class ASTLineerizer {
     public var descs: [String] = []
+    public var compilationUnit: CompilationUnit
     var ast: ASTNode
 
-    init(ast: ASTNode) {
+    init(ast: ASTNode, compilationUnit: CompilationUnit) {
         self.ast = ast
+        self.compilationUnit = compilationUnit
     }
 
     func linearize() -> [String] {
@@ -11,8 +37,55 @@ class ASTLineerizer {
         return descs
     }
 
-    func append(_ value: String) {
-        descs.append(value)
+    func append(_ value: AnyNode) {
+        
+        compilationUnit.nodeIdToNode.append(value)
+        
+        switch value {
+        case .program(let node):
+            descs.append(node.justName)
+        case .statement(let node):
+            descs.append(node.justName)
+        case .expression(let node):
+            descs.append(node.justName)
+        case .declaration(let node):
+            descs.append(node.justName)
+        case .objectProperty(let node):
+            descs.append(node.justName)
+        case .classElement(let node):
+            descs.append(node.justName)
+        case .forInit(let node):
+            descs.append(node.justName)
+        case .forEachLeft(let node):
+            descs.append(node.justName)
+        case .pattern(let node):
+            descs.append(node.justName)
+        case .assignmentTarget(let node):
+            descs.append(node.justName)
+        case .propKey(let node):
+            descs.append(node.justName)
+        case .classElemKey(let node):
+            descs.append(node.justName)
+        case .destructuringPattern(let node):
+            descs.append(node.justName)
+        case .destructuringObjectProperty(let node):
+            descs.append(node.justName)
+        case .objectPatternProperty(let node):
+            descs.append(node.justName)
+        case .variableDeclarator(let node):
+            descs.append(node.justName)
+        case .arrayElement(let node):
+            descs.append(node.justName)
+        case .arrayPatternElement(let node):
+            descs.append(node.justName)
+        case .destructuringArrayPatternElement(let node):
+            descs.append(node.justName)
+        case .identifier(let node):
+            descs.append(node.justName)
+        }
+
+
+        
     }
 }
 
@@ -24,137 +97,137 @@ extension ASTLineerizer: NodeWalker {
 
 
     func handleProgram(nodeId: Int, node: Program) {
-        append(node.justName)
+        append(.program(node))
     }
 
     func preStmt(nodeId: Int, node: Statement) -> Bool {
-        append(node.justName)
+        append(.statement(node))
         return true
     }
 
     func postStmt(nodeId: Int, node: Statement) {}
 
     func preExpr(nodeId: Int, node: Expression) -> Bool {
-        append(node.justName)
+        append(.expression(node))
         return true
     }
 
     func postExpr(nodeId: Int, node: Expression) {}
 
     func preDecl(nodeId: Int, node: Declaration) -> Bool {
-        append(node.justName)
+        append(.declaration(node))
         return true
     }
 
     func postDecl(nodeId: Int, node: Declaration) {}
 
     func preObjProp(nodeId: Int, node: ObjectProperty) -> Bool {
-        append(node.justName)
+        append(.objectProperty(node))
         return true
     }
 
     func postObjProp(nodeId: Int, node: ObjectProperty) {}
 
     func preClassElem(nodeId: Int, node: ClassElement) -> Bool {
-        append(node.justName)
+        append(.classElement(node))
         return true
     }
 
     func postClassElem(nodeId: Int, node: ClassElement) {}
 
     func preForInit(nodeId: Int, node: ForInit) -> Bool {
-        append(node.justName)
+        append(.forInit(node))
         return true
     }
 
     func postForInit(nodeId: Int, node: ForInit) {}
 
     func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
-        append(node.justName)
+        append(.forEachLeft(node))
         return true
     }
 
     func postForEachLeft(nodeId: Int, node: ForEachLeft) {}
 
     func prePattern(nodeId: Int, node: Pattern) -> Bool {
-        append(node.justName)
+        append(.pattern(node))
         return true
     }
 
     func postPattern(nodeId: Int, node: Pattern) {}
 
     func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
-        append(node.justName)
+        append(.assignmentTarget(node))
         return true
     }
 
     func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {}
 
     func prePropKey(nodeId: Int, node: PropertyKey) -> Bool {
-        append(node.justName)
+        append(.propKey(node))
         return true
     }
 
     func postPropKey(nodeId: Int, node: PropertyKey) {}
 
     func preClassElemKey(nodeId: Int, node: ClassElementKey) -> Bool {
-        append(node.justName)
+        append(.classElemKey(node))
         return true
     }
 
     func postClassElemKey(nodeId: Int, node: ClassElementKey) {}
 
     func preDestructuringPattern(nodeId: Int, node: DestructuringPattern) -> Bool {
-        append(node.justName)
+        append(.destructuringPattern(node))
         return true
     }
 
     func postDestructuringPattern(nodeId: Int, node: DestructuringPattern) {}
 
     func preDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) -> Bool {
-        append(node.justName)
+        append(.destructuringObjectProperty(node))
         return true
     }
 
     func postDestructingObjectProperty(nodeId: Int, node: DestructuringObjectProperty) {}
 
     func preObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) -> Bool {
-        append(node.justName)
+        append(.objectPatternProperty(node))
         return true
     }
 
     func postObjectPatternProperty(nodeId: Int, node: ObjectPatternProperty) {}
 
     func preObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) -> Bool {
-        append(node.justName)
+        append(.propKey(node))
         return true
     }
 
     func postObjectPatternPropertyKey(nodeId: Int, node: PropertyKey) {}
 
     func preVariableDeclarator(nodeId: Int, node: VariableDeclarator) -> Bool {
-        append(node.justName)
+        append(.variableDeclarator(node))
         return true
     }
 
     func postVariableDeclarator(nodeId: Int, node: VariableDeclarator) {}
 
     func preArrayElement(nodeId: Int, node: ArrayElement) -> Bool {
-        append(node.justName)
+        append(.arrayElement(node))
         return true
     }
 
     func postArrayElement(nodeId: Int, node: ArrayElement) {}
 
     func preArrayPatternElement(nodeId: Int, node: ArrayPatternElement) -> Bool {
-        append(node.justName)
+        append(.arrayPatternElement(node))
         return true
     }
 
     func postArrayPatternElement(nodeId: Int, node: ArrayPatternElement) {}
 
     func preDestructuringArrayPatternElement(nodeId: Int, node: DestructuringArrayPatternElement) -> Bool {
-        append(node.justName)
+        append(.destructuringArrayPatternElement(node))
         return true
     }
 
@@ -165,7 +238,7 @@ extension ASTLineerizer: NodeWalker {
     }
 
     func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
-        append(Identifier.identifier(name).justName)
+        append(.identifier(Identifier.identifier(name)))
     }
 
     func specializedParamVisit(nodeId: Int, phase: PreOrPost, mode: CatchOrParam) -> Bool {

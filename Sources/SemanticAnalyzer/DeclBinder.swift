@@ -16,7 +16,6 @@ public struct Binding {
     var scopeId: Int
     var declNodeId: Int 
     var declOrder: Int // Şimdilik direk nodeId ye eşit olabilir, çünkü nodeId ler zaten sıralı ve benzersiz. Ancak ileride farklı bir ID sistemi gelirse diye ayrı bir sayaç tutmak mantıklı olabilir!
-    var homeFunctionScopeId: Int?
 
     // StorageType
 

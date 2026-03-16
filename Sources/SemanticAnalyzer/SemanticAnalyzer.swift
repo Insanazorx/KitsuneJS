@@ -8,6 +8,8 @@ struct SemanticAnalyzer {
     var declBinder: WalkerImpl<DeclBinder>
     var refBinder: WalkerImpl<RefBinder>
     var resolver: WalkerImpl<Resolver>
+    var captureAnalyzer: CaptureAnalyzer
+    
 }
 
 extension SemanticAnalyzer {
@@ -19,6 +21,7 @@ extension SemanticAnalyzer {
         self.declBinder = WalkerImpl(DeclBinder(self.compilationUnit))
         self.refBinder = WalkerImpl(RefBinder(self.compilationUnit))
         self.resolver = WalkerImpl(Resolver(self.compilationUnit))
+        self.captureAnalyzer = CaptureAnalyzer(self.compilationUnit)
     }
 
     mutating func analyze(){

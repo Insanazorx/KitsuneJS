@@ -1,5 +1,6 @@
 Scope 0
 ├─ kind: global
+├─ ownerFunction: nil
 ├─ bindings
 │  ├─ Binding 0
 │  │  ├─ name: innerBlockFn
@@ -12,13 +13,20 @@ Scope 0
 └─ children
    └─ Scope 1
       ├─ kind: function
+      ├─ ownerFunction: nil
       ├─ bindings
       │  └─ <empty>
       ├─ boundRefs
-      │  └─ BoundRef 0 not found
+      │  └─ BoundRef 3
+      │     ├─ name: innerBlockFn
+      │     ├─ kind: Read
+      │     ├─ bindingId: nil
+      │     ├─ captureDepth: 0
+      │     └─ storageKind: unknown
       └─ children
          ├─ Scope 2
          │  ├─ kind: param
+         │  ├─ ownerFunction: 2
          │  ├─ bindings
          │  │  ├─ Binding 1
          │  │  │  ├─ name: p
@@ -35,6 +43,7 @@ Scope 0
          │     └─ <empty>
          └─ Scope 3
             ├─ kind: block
+            ├─ ownerFunction: 2
             ├─ bindings
             │  ├─ Binding 4
             │  │  ├─ name: innerVar
@@ -46,14 +55,41 @@ Scope 0
             │     ├─ name: innerConst
             │     └─ kind: lexical(isConst: true)
             ├─ boundRefs
-            │  ├─ BoundRef 1 not found
-            │  ├─ BoundRef 2 not found
-            │  ├─ BoundRef 3
-            │  │  ├─ name: innerBlockFn
+            │  ├─ BoundRef 40
+            │  │  ├─ name: p
             │  │  ├─ kind: Read
-            │  │  └─ bindingId: nil
-            │  ├─ BoundRef 4 not found
-            │  ├─ BoundRef 5 not found
-            │  └─ BoundRef 6 not found
+            │  │  ├─ bindingId: nil
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: unknown
+            │  ├─ BoundRef 41
+            │  │  ├─ name: x
+            │  │  ├─ kind: Read
+            │  │  ├─ bindingId: nil
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: unknown
+            │  ├─ BoundRef 42
+            │  │  ├─ name: y
+            │  │  ├─ kind: Read
+            │  │  ├─ bindingId: nil
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: unknown
+            │  ├─ BoundRef 43
+            │  │  ├─ name: innerVar
+            │  │  ├─ kind: Read
+            │  │  ├─ bindingId: 4
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: unknown
+            │  ├─ BoundRef 44
+            │  │  ├─ name: innerVar2
+            │  │  ├─ kind: Read
+            │  │  ├─ bindingId: 5
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: unknown
+            │  └─ BoundRef 45
+            │     ├─ name: innerConst
+            │     ├─ kind: Read
+            │     ├─ bindingId: 6
+            │     ├─ captureDepth: 0
+            │     └─ storageKind: unknown
             └─ children
                └─ <empty>
