@@ -1185,10 +1185,10 @@ extension Parser : Parsers {
             advance() // consume '*'
         }
 
-        var name: Identifier? = nil
+        var name: String? = nil
 
         if case .identifier(let functionName) = currentToken()?.tokenType {
-            name = Identifier.identifier(functionName)
+            name = functionName
             advance() // consume function name
         }
 
@@ -1246,10 +1246,10 @@ extension Parser : Parsers {
         advance() // consume 'class' keyword
 
         //class expression may have optional name
-        var name: Identifier? = nil
+        var name: String? = nil
         
         if case .identifier(let className) = currentToken()?.tokenType {
-            name = Identifier.identifier(className)
+            name = className
             advance() // consume class name
         }
         
@@ -2106,7 +2106,7 @@ extension Parser : Parsers {
         guard case let .identifier(func_name) = currentToken()?.tokenType else { //get function name
             throw ParserError.unexpectedToken(putErrorOutput(currentTokenIndex))
         }
-        let name = Identifier.identifier(func_name)
+        let name = func_name
     
         advance()         // consume function name
 
@@ -2236,7 +2236,7 @@ extension Parser : Parsers {
             throw ParserError.unexpectedToken(putErrorOutput(currentTokenIndex))
         }
 
-        let name = Identifier.identifier(class_name)
+        let name = class_name
 
         advance() // consume class name
         

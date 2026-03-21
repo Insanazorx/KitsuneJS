@@ -1,27 +1,3 @@
-public enum AnyNode {
-    case program(Program)
-    case statement(Statement)
-    case expression(Expression)
-    case declaration(Declaration)
-    case objectProperty(ObjectProperty)
-    case classElement(ClassElement)
-    case forInit(ForInit)
-    case forEachLeft(ForEachLeft)
-    case pattern(Pattern)
-    case assignmentTarget(AssignmentTarget)
-    case propKey(PropertyKey)
-    case classElemKey(ClassElementKey)
-    case destructuringPattern(DestructuringPattern)
-    case destructuringObjectProperty(DestructuringObjectProperty)
-    case objectPatternProperty(ObjectPatternProperty)
-    case variableDeclarator(VariableDeclarator)
-    case arrayElement(ArrayElement)
-    case arrayPatternElement(ArrayPatternElement)
-    case destructuringArrayPatternElement(DestructuringArrayPatternElement)
-    case identifier(Identifier)
-
-}
-
 class ASTLineerizer {
     public var descs: [String] = []
     public var compilationUnit: CompilationUnit
@@ -80,8 +56,8 @@ class ASTLineerizer {
             descs.append(node.justName)
         case .destructuringArrayPatternElement(let node):
             descs.append(node.justName)
-        case .identifier(let node):
-            descs.append(node.justName)
+        default:
+            break;
         }
 
 
@@ -91,8 +67,25 @@ class ASTLineerizer {
 
 extension ASTLineerizer: NodeWalker {
 
-    func handleBindingIdentifier(nodeId: Int, name: String) {
+    func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
+
+    }
+
+    func handleRefIdentifier(nodeId: Int, name: String) {
         
+    }
+
+    func handleDeclIdentifier(nodeId: Int, name: String) {
+       
+    }
+
+    func specializedBindingVisit(nodeId: Int, type: AnyNode) -> Bool {
+        return true
+    }
+
+
+    func handleBindingIdentifier(nodeId: Int, name: String) {
+
     }
 
 
@@ -235,10 +228,6 @@ extension ASTLineerizer: NodeWalker {
 
     func handlePrimary(nodeId: Int, node: Expression) {
         // Primary expressions are already recorded in preExpr.
-    }
-
-    func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
-        append(.identifier(Identifier.identifier(name)))
     }
 
     func specializedParamVisit(nodeId: Int, phase: PreOrPost, mode: CatchOrParam) -> Bool {

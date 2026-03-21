@@ -110,10 +110,10 @@ extension Declaration: JustName {
             return "VariableDeclaration"
         case .lexical:
             return "LexicalDeclaration"
-        case .function:
-            return "FunctionDeclaration"
-        case .class:
-            return "ClassDeclaration"
+        case .function(let name,_,_,_,_):
+            return "FunctionDeclaration (\"\(name)\")"
+        case .class (let name,_,_):
+            return "ClassDeclaration (\"\(name)\")"
         case .importDecl:
             return "ImportDeclaration"
         case .exportDecl:
@@ -140,18 +140,6 @@ extension Pattern: JustName {
 }
 
 
-
-
-
-
-extension Identifier: JustName {
-    var justName: String {
-        switch self {
-        case .identifier(let name):
-            return "Identifier (\"\(name)\")"
-        }
-    }
-}
 
 extension AssignmentTarget: JustName {
     var justName: String {

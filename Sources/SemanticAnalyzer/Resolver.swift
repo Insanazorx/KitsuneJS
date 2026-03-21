@@ -50,6 +50,19 @@ public class Resolver {
 }
 
 extension Resolver: NodeWalker {
+
+    public func specializedBindingVisit(nodeId: Int, type: AnyNode) -> Bool {
+        return true
+    }
+
+    public func handleDeclIdentifier(nodeId: Int, name: String) {
+        // This will be handled in DeclBinder, so we can ignore it here.
+    }
+
+    public func handleRefIdentifier(nodeId: Int, name: String) {
+        // This will be handled in Resolver, so we can ignore it here.
+    }
+
     public func handleBindingIdentifier(nodeId: Int, name: String) {
     
     }

@@ -85,7 +85,7 @@ extension CaptureAnalyzer {
 
         //Little trick here (nodeIdToScopeId[nodeId] + 1):
         //Because owner function itself is not included in its own scope's nodeIdToScopeId mapping,
-        //but it is included in the parent scope's nodeIdToScopeId mapping. Params scope must have the 
+        //but it is included in the parent scope's nodeIdToScopeId mapping. function scope must have the 
         //successor scopeId of its owner.
         return compilationUnit.scopes[compilationUnit.nodeIdToScopeId[nodeId] + 1] 
     }

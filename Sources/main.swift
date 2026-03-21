@@ -30,7 +30,7 @@ func main() {
       var scopeBuilder = WalkerImpl(ScopeBuilder(compilationUnit));
       var declBinder = WalkerImpl(DeclBinder(compilationUnit));
       var refBinder = WalkerImpl(RefBinder(compilationUnit));
-
+      var captureAnalyzer = CaptureAnalyzer(compilationUnit);
 
       
       scopeBuilder.walk(node: ast)
@@ -45,15 +45,24 @@ func main() {
 
       declBinder.walk(node: ast)
       refBinder.walk(node: ast)
-
       
+      //captureAnalyzer.analyze()
 
       print(compilationUnit.renderDescription())
 
-      let fileURL2 = URL(fileURLWithPath: "output.txt")
+      
+      
+    let fileURL2 = URL(fileURLWithPath: "output.txt")
 
     do {
-      try compilationUnit.renderDescription().write(to: fileURL2, atomically: true, encoding: .utf8)
+      var stringToWrite: String = ""
+      stringToWrite += compilationUnit.renderDescription()
+      var nodeIdForCounting = 0
+      for scopeId in compilationUnit.nodeIdToScopeId {
+        stringToWrite += "\nNode ID: \(nodeIdForCounting)-> \(astLineerizer.walker.descs[nodeIdForCounting]) -> Scope ID: \(scopeId)"
+        nodeIdForCounting += 1
+      }
+      try stringToWrite.write(to: fileURL2, atomically: true, encoding: .utf8)
       print("Output written to output.txt")
     } catch {
       print("Hata:", error)

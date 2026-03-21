@@ -1,8 +1,15 @@
-function innerBlockFn(p = 1, [x, y] = [2, 3]) {
-    var innerVar = 0;
-    var innerVar2 = 0;
-    const innerConst = 0;
-    return p + x + y + innerVar + innerVar2 + innerConst;
-}
 
-let a = 1;
+var a = 1;
+
+function outerFn(f,g,h) {
+    var outerVar = 0;
+    const outerConst = b
+
+    function innerBlockFn(p = 1, {x, z:y}) {
+        var innerVar = outerVar + outerConst;
+        var innerVar2 = a;
+        const innerConst = f+g+h;
+        return p + x + y + innerVar + innerVar2 + innerConst;
+    }
+}
+let b = 2;

@@ -1,5 +1,27 @@
 // AST.swift
 
+public enum AnyNode {
+    case program(Program)
+    case statement(Statement)
+    case expression(Expression)
+    case declaration(Declaration)
+    case objectProperty(ObjectProperty)
+    case classElement(ClassElement)
+    case forInit(ForInit)
+    case forEachLeft(ForEachLeft)
+    case pattern(Pattern)
+    case assignmentTarget(AssignmentTarget)
+    case propKey(PropertyKey)
+    case classElemKey(ClassElementKey)
+    case destructuringPattern(DestructuringPattern)
+    case destructuringObjectProperty(DestructuringObjectProperty)
+    case objectPatternProperty(ObjectPatternProperty)
+    case variableDeclarator(VariableDeclarator)
+    case arrayElement(ArrayElement)
+    case arrayPatternElement(ArrayPatternElement)
+    case destructuringArrayPatternElement(DestructuringArrayPatternElement)
+}
+
 // Top-level node wrapper
 public indirect enum ASTNode {
     case expression(Expression)
@@ -13,9 +35,7 @@ public indirect enum Program {
     case program(body: [Statement])
 }
 // For func names, class names 
-public enum Identifier {
-    case identifier(String)
-}
+
 //---------------------------o-----------------------------
 public indirect enum AssignmentTarget {
     case identifier(String)
@@ -80,7 +100,7 @@ public indirect enum Expression {
 
     case arrayLiteral(elements: [ArrayElement])  
     case functionExpression(
-        name: Identifier?,
+        name: String?,
         params: [Pattern]?,
         body: Statement,
         isAsync: Bool,
@@ -88,7 +108,7 @@ public indirect enum Expression {
     )
 
     case classExpression(
-        name: Identifier?,
+        name: String?,
         superClass: Expression?,
         body: [ClassElement]
     )
@@ -202,7 +222,7 @@ public indirect enum CaseStatement {
 // Declarations
 public indirect enum Declaration {
     case function(
-        name: Identifier,
+        name: String,
         params: [Pattern]?,
         body: Statement, // typically .block
         isAsync: Bool,
@@ -210,7 +230,7 @@ public indirect enum Declaration {
     )
 
     case `class`(
-        name: Identifier,
+        name: String,
         superClass: Expression?,
         body: [ClassElement]
     )
@@ -292,16 +312,7 @@ extension ASTNode: CustomStringConvertible {
     }
 }
 
-extension Identifier: CustomStringConvertible {
-    public var description: String {renderTree(toTreeBox())}
 
-    fileprivate func toTreeBox() -> TreeBox {
-        switch self {
-        case .identifier(let name):
-            return box("Identifier.identifier(\(name))")
-        }
-    }
-}
 
 extension Pattern: CustomStringConvertible {
     public var description: String { renderTree(toTreeBox()) }
@@ -430,7 +441,7 @@ extension Expression: CustomStringConvertible {
 
         case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
             return box("Expression.functionExpression", [
-                boxOpt("name", name?.toTreeBox()),
+                box("name: \(name ?? "<no name>"))"),
                 boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
@@ -439,7 +450,7 @@ extension Expression: CustomStringConvertible {
 
         case .classExpression(let name, let superClass, let body):
             return box("Expression.classExpression", [
-                boxOpt("name", name?.toTreeBox()),
+                box("name: \(name ?? "<no name>"))"),
                 boxOpt("superClass", superClass?.toTreeBox()),
                 boxList("body", body.map { $0.toTreeBox() })
             ])
@@ -722,7 +733,7 @@ extension Declaration: CustomStringConvertible {
         switch self {
         case .function(let name, let params, let body, let isAsync, let isGenerator):
             return box("Declaration.function", [
-                boxOpt("name", name.toTreeBox()),
+                box("name: \(name)"),
                 boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
@@ -731,7 +742,7 @@ extension Declaration: CustomStringConvertible {
 
         case .class(let name, let superClass, let body):
             return box("Declaration.class", [
-                boxOpt("name", name.toTreeBox()),
+                box("name: \(name)"),
                 boxOpt("superClass", superClass?.toTreeBox()),
                 boxList("body", body.map { $0.toTreeBox() })
             ])

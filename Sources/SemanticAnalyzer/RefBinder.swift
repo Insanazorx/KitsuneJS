@@ -69,16 +69,18 @@ extension RefBinder {
 
 extension RefBinder: NodeWalker {
 
-    public func handleBindingIdentifier(nodeId: Int, name: String) {
 
+
+
+    public func specializedBindingVisit(nodeId: Int, type: AnyNode) -> Bool {
+        return true
     }
 
-    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
-        if isDecl {
-            // Declarations are handled in DeclBinder, so we can ignore them here.
-            return
-        }
-        
+    public func handleDeclIdentifier(nodeId: Int, name: String) {
+        // Declarations are handled in DeclBinder, so we can ignore them here.
+    }
+
+    public func handleRefIdentifier(nodeId: Int, name: String) {
         let kind: RefKind = if let currentContext = refContextStack.last {
             currentContext
         } else {
@@ -99,6 +101,16 @@ extension RefBinder: NodeWalker {
 
         compilationUnit.boundRefs.append(boundRef)
         compilationUnit.addRefToScopeByLookingAstId(nodeId: nodeId)
+    }
+
+
+    public func handleBindingIdentifier(nodeId: Int, name: String) {
+
+    }
+
+    public func handleIdentifier(nodeId: Int, name: String, isDecl: Bool) {
+       
+        
 
     }
 
