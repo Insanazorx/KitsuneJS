@@ -2,8 +2,11 @@ Scope 0
 ├─ kind: global
 ├─ ownerFunction: nil
 ├─ bindings
-│  └─ Binding 0
-│     ├─ name: a
+│  ├─ Binding 0
+│  │  ├─ name: a
+│  │  └─ kind: lexical(isConst: false)
+│  └─ Binding 1
+│     ├─ name: b
 │     └─ kind: lexical(isConst: false)
 ├─ boundRefs
 │  ├─ BoundRef 14
@@ -13,15 +16,21 @@ Scope 0
 │  │  ├─ captureDepth: 0
 │  │  └─ storageKind: lexical
 │  ├─ BoundRef 17
-│  │  ├─ name: d
+│  │  ├─ name: b
 │  │  ├─ kind: Read
-│  │  ├─ bindingId: nil
+│  │  ├─ bindingId: 1
 │  │  ├─ captureDepth: 0
-│  │  └─ storageKind: unknown
-│  └─ BoundRef 22
-│     ├─ name: a
+│  │  └─ storageKind: lexical
+│  ├─ BoundRef 19
+│  │  ├─ name: a
+│  │  ├─ kind: Read
+│  │  ├─ bindingId: 0
+│  │  ├─ captureDepth: 0
+│  │  └─ storageKind: lexical
+│  └─ BoundRef 20
+│     ├─ name: b
 │     ├─ kind: Read
-│     ├─ bindingId: 0
+│     ├─ bindingId: 1
 │     ├─ captureDepth: 0
 │     └─ storageKind: lexical
 └─ children
@@ -31,23 +40,19 @@ Node ID: 1-> DeclarationStatement -> Scope ID: 0
 Node ID: 2-> LexicalDeclaration -> Scope ID: 0
 Node ID: 3-> VariableDeclarator -> Scope ID: 0
 Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
-Node ID: 5-> ObjectLiteral -> Scope ID: 0
-Node ID: 6-> ObjectProperty -> Scope ID: 0
-Node ID: 7-> IdentifierPropertyKey ("b") -> Scope ID: 0
-Node ID: 8-> Literal -> Scope ID: 0
-Node ID: 9-> ExpressionStatement -> Scope ID: 0
-Node ID: 10-> AssignmentExpression -> Scope ID: 0
-Node ID: 11-> ComputedMemberAssignmentTarget -> Scope ID: 0
-Node ID: 12-> MemberExpression -> Scope ID: 0
-Node ID: 13-> MemberExpression -> Scope ID: 0
+Node ID: 5-> Literal -> Scope ID: 0
+Node ID: 6-> DeclarationStatement -> Scope ID: 0
+Node ID: 7-> LexicalDeclaration -> Scope ID: 0
+Node ID: 8-> VariableDeclarator -> Scope ID: 0
+Node ID: 9-> BindingIdentifier ("b") -> Scope ID: 0
+Node ID: 10-> BinaryExpression -> Scope ID: 0
+Node ID: 11-> Literal -> Scope ID: 0
+Node ID: 12-> BinaryExpression -> Scope ID: 0
+Node ID: 13-> Literal -> Scope ID: 0
 Node ID: 14-> Identifier ("a") -> Scope ID: 0
-Node ID: 15-> Identifier ("d") -> Scope ID: 0
-Node ID: 16-> Literal -> Scope ID: 0
-Node ID: 17-> ExpressionStatement -> Scope ID: 0
-Node ID: 18-> AssignmentExpression -> Scope ID: 0
-Node ID: 19-> MemberAssignmentTarget -> Scope ID: 0
-Node ID: 20-> Identifier ("a") -> Scope ID: 0
-Node ID: 21-> ObjectLiteral -> Scope ID: 0
-Node ID: 22-> ObjectProperty -> Scope ID: 0
-Node ID: 23-> IdentifierPropertyKey ("c") -> Scope ID: 0
-Node ID: 24-> Literal -> Scope ID: 0
+Node ID: 15-> ExpressionStatement -> Scope ID: 0
+Node ID: 16-> AssignmentExpression -> Scope ID: 0
+Node ID: 17-> IdentifierAssignmentTarget ("b") -> Scope ID: 0
+Node ID: 18-> BinaryExpression -> Scope ID: 0
+Node ID: 19-> Identifier ("a") -> Scope ID: 0
+Node ID: 20-> Identifier ("b") -> Scope ID: 0

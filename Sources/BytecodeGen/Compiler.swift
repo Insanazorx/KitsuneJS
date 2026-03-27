@@ -9,6 +9,7 @@ class BytecodeCompiler {
     var currentNodeId: Int = 0
     var constantsPool: [String: Int] = [:]
 
+    var sharedCompileTimeInfo: UInt64 = 0 // This can be used to store any information that needs to be shared across different compile functions, such as loop depth, switch case depth, etc.
 
 
     init(compilationUnit: CompilationUnit) {
@@ -21,17 +22,17 @@ class BytecodeCompiler {
 extension BytecodeCompiler {
 
     func createCPIndex(for name: String) -> Bytecode.CPIndex {
-        let idx = putRecordOnConstantsPool(name)
+        let (idx, _) = putRecordOnConstantsPool(name)
         return Bytecode.CPIndex(rawValue: UInt32(idx))
     }
     
-    func putRecordOnConstantsPool(_ value: String) -> Int {
+    func putRecordOnConstantsPool(_ value: String) -> (Int, Bool) {
         if let existingIndex = constantsPool[value] {
-            return existingIndex
+            return (existingIndex, true)
         } else {
             let newIndex = constantsPool.count
             constantsPool[value] = newIndex
-            return newIndex
+            return (newIndex, false)
         }
     }
 
@@ -79,7 +80,7 @@ extension BytecodeCompiler {
     }
 
     func walkProgram(_ program: Program) {
-    let id = allocNodeId()
+        _ = allocNodeId()
             if case .program(let body) = program {
                 for statement in body {
                     walkStatement(statement)
@@ -241,7 +242,72 @@ extension BytecodeCompiler {
     
     
     
-    func compileBinaryExpression(currentNodeId: Int,_ left: Expression, _ op: TokenType, _ right: Expression) {}
+    func compileBinaryExpression(currentNodeId: Int,_ left: Expression, _ op: TokenType, _ right: Expression) {
+        walkExpression(left)
+        let leftReg = allocRegister()
+        emit(.star(leftReg))
+        
+        walkExpression(right)
+        
+        guard case .binaryOp(let binaryOp) = op else{
+            fatalError("Expected a binary operator token, but got \(op). NodeId: \(currentNodeId)")
+        }
+
+        switch binaryOp {
+            case .plus:
+                emit(.add(leftReg))
+            case .minus:
+                emit(.sub(leftReg))
+            case .multiply:
+                emit(.mul(leftReg))
+            case .divide:
+                emit(.div(leftReg))
+            case .percent:
+                emit(.mod(leftReg))
+            case .equal:
+                emit(.eq(leftReg))
+            case .notEqual:
+                emit(.neq(leftReg))
+            case .lessThan:
+                emit(.lt(leftReg))
+            case .lessThanOrEqual:
+                emit(.le(leftReg))
+            case .greaterThan:
+                emit(.gt(leftReg))
+            case .greaterThanOrEqual:
+                emit(.ge(leftReg))
+            case .ampersand:
+                emit(.and(leftReg))
+            case .pipe:
+                emit(.or(leftReg))
+            case .caret:
+                emit(.xor(leftReg))
+            case .logicalAnd:
+                emit(.logicalAnd(leftReg))
+            case .logicalOr:
+                emit(.logicalOr(leftReg))
+            case .instanceof:
+                emit(.instanceof(leftReg))
+            case .in:
+                emit(.inOp(leftReg))
+            case .assign:
+                break
+            case .leftShift:
+                emit(.shl(leftReg))
+            case .rightShift:
+                emit(.shr(leftReg))
+            case .unsignedRightShift:
+                emit(.ushr(leftReg))
+            case .strictEqual:
+                emit(.strictEq(leftReg))
+            case .strictNotEqual:
+                emit(.strictNeq(leftReg))
+            default:
+                fatalError("Binary operator \(binaryOp) is not supported yet. NodeId: \(currentNodeId)")
+}
+
+
+    }
     func compileMemberExpression(currentNodeId: Int, _ object: Expression, _ property: Expression) {}
     func compileComputedMemberExpression(currentNodeId: Int, _ object: Expression, _ propertyExpr: Expression) {}
     func compileSequenceExpression(currentNodeId: Int, _ exprs: [Expression]) {}
@@ -250,14 +316,14 @@ extension BytecodeCompiler {
         switch expr {
             case .identifier(let name):
                 let ref = compilationUnit.getBoundRefByNodeId(nodeId: currentNodeId)
-                if ref.storageKind == .global {
+                if ref.storageKind == .global && ref.bindingId == nil {
                     // If there is no binding, it must be a global variable.
                     // We assume that VM will match the global variable,
                     // else it will throw a ReferenceError at runtime.
-                    let cpconst = createCPIndex(for: name)
+                    let cpIndex = createCPIndex(for: name)
 
                     // Put "vm->acc" state to global variable index to be used later
-                    emit(.ldaGlobal(cpconst))
+                    emit(.ldaGlobal(cpIndex))
                     return
                 }
                 guard let bindingId = ref.bindingId else {
@@ -277,15 +343,14 @@ extension BytecodeCompiler {
                     case .context:
                         let depth = ref.capturingDepth
                         emit(.ldaContextSlot( UInt8(depth), UInt16(slot)))
+                    case .global:
+                        let cpIndex = createCPIndex(for: name)
+                        emit(.ldaGlobal(cpIndex))
                     default:
                         fatalError("Invalid storage kind for identifier \(name). NodeId: \(currentNodeId)")
 
                 }
-
                 
-                
-                
-                break
             case .literal(let lit):
                 switch lit {
                     case .string(let str):
@@ -299,7 +364,7 @@ extension BytecodeCompiler {
                         emit(.ldaNull)
                     case .undefined:
                         emit(.ldaUndef)
-                    case .float(let num):
+                    case .float:
                         break //TODO
                 }
                 break
@@ -310,10 +375,49 @@ extension BytecodeCompiler {
     func compileAssignmentExpression(currentNodeId: Int, _ target: AssignmentTarget, _ op: TokenType, _ value: Expression) {
         
         walkAssignmentTarget(target)                            // acc = [31:0] slot or cp index | [63:32] storage kind  
-        let storingInfoReg = allocRegister()      // save storing information elsewhere
-        emit(.star(storingInfoReg))   
-
+        
         walkExpression(value)
+        let valueReg = allocRegister()
+        emit(.star(valueReg))
+
+        let isNamedMemberAssignment = sharedCompileTimeInfo & (1<<63) != 0 // Check if the highest bit is set, which indicates an object assignment target (member or computed member)
+        let isComputedMemberAssignment = sharedCompileTimeInfo & (1<<62) != 0 // Check if the second highest bit is set, which indicates a computedMember assignment target
+        let isDestructuringAssignment = sharedCompileTimeInfo & (1<<61) != 0 // Check if the third highest bit is set, which indicates a destructuring assignment target
+        
+        if isNamedMemberAssignment{
+            
+            let (cpIndex, objectReg) = (sharedCompileTimeInfo & 0xFFFF, Bytecode.Reg(rawValue: UInt16((sharedCompileTimeInfo >> 32) & 0x1FFF))) // [31:0] cp index, [61:32] object register
+            
+            emit(.ldar(valueReg))
+            emit(.setPropNamed(objectReg, Bytecode.CPIndex(rawValue: UInt32(cpIndex))))
+       
+        } else if isComputedMemberAssignment {
+            
+            let objectReg = Bytecode.Reg(rawValue: UInt16((sharedCompileTimeInfo >> 32) & 0x1FFF)) // [61:32] property register
+            let propertyReg = Bytecode.Reg(rawValue: UInt16(sharedCompileTimeInfo & 0x1FFF)) // [31:0] object register
+            
+            emit(.ldar(valueReg))
+            emit(.setPropKeyed(objectReg, propertyReg))
+            
+        } else {
+
+            let storageKindBits = (sharedCompileTimeInfo >> 48) & 0x7F // [63:32] storage kind (0 = unknown, 1 = lexical, 2 = context, 4 = global)
+            switch storageKindBits {
+                case 1: // lexical
+                    let slot = sharedCompileTimeInfo & 0xFFFF // [31:0] slot index
+                    emit(.staLexical(UInt16(slot)))
+                case 2: // context
+                    let depth = (sharedCompileTimeInfo >> 32) & 0xFFFF // [47:32] capturing depth
+                    let slot = sharedCompileTimeInfo & 0xFFFF // [31:0] slot index
+                    emit(.staContextSlot(UInt8(depth), UInt16(slot)))
+                case 4: // global
+                    let cpIndex = sharedCompileTimeInfo & 0xFFFF // [31:0] cp index
+                    emit(.staGlobal(Bytecode.CPIndex(rawValue: UInt32(cpIndex))))
+                default:
+                    fatalError("Invalid storage kind bits in sharedCompileTimeInfo for assignment target. NodeId: \(currentNodeId)")
+            }
+
+        } 
     }
 
     func walkAssignmentTarget(_ target: AssignmentTarget) {
@@ -330,13 +434,12 @@ extension BytecodeCompiler {
                 
             case .destructuring(let pattern):
                 // emit bytecode to compute the destructuring assignment and load it into the accumulator.
-                break
+                compileDestructuringAssignmentTarget(currentNodeId: id, pattern)
         }
     }
 
 
-    //ABI: acc = slot (or) cp index | storageKind << 32 
-
+    //ABI: sharedCompileTimeInfo = slot (or) cp index | storageKind << 32 
     func compileIdentifierAssignmentTarget(currentNodeId: Int, _ name: String) {
 
         let ref=compilationUnit.getBoundRefByNodeId(nodeId: currentNodeId)
@@ -360,10 +463,9 @@ extension BytecodeCompiler {
             // If there is no binding, it must be a global variable.
             // We assume that VM will match the global variable,
             // else it will throw a ReferenceError at runtime.
-            let cpidx = putRecordOnConstantsPool(name)
-
-            // Put "vm->acc" state to global variable index to be used later
-            emit(.ldaSmi32(Int32(cpidx)))        
+            let (cpidx, _) = putRecordOnConstantsPool(name)
+            
+            sharedCompileTimeInfo = (4 << 48) | UInt64(cpidx) // storageKind = 4 for global variables
             return
         }
 
@@ -373,45 +475,41 @@ extension BytecodeCompiler {
             }
             let storageKind = ref.storageKind
                     
-            // Load accumulator with the value from the slot and storage kind
-            // so that VM can determine slot and storage kind to perform the write operation
-            // in the caller compile function with "staLexical", "staContext" or "staGlobal" bytecode.
-
             // 0x0000 0000 0000 0000  0000 0000 0000 0000
             // [31:0] slot index for lexical/context variables or cp index for global variables
             // [63:32] storage kind (0 = unknown, 1 = lexical, 2 = context, 4 = global)
                     
-            var storageKindBits: Int = 0
+            var maybeCPIndex: UInt64? = nil
+            var depth: UInt64 = 0000
+            var storageKindBits: UInt64 = 0
             switch storageKind {
                 case .lexical:
                     storageKindBits = 1
+                
                 case .context:
                     storageKindBits = 2
+
+                    depth = UInt64(ref.capturingDepth)
+                
                 case .global:
                     storageKindBits = 4
+                    
+                    let (cpidx, _) = putRecordOnConstantsPool(name)
+                   
+                    maybeCPIndex = UInt64(cpidx)
+                    guard let CPIndex = maybeCPIndex else {
+                        fatalError("Failed to put global variable \(name) on constants pool. NodeId: \(currentNodeId)")
+                    }
+                    
+                    sharedCompileTimeInfo = (storageKindBits << 48) | UInt64(CPIndex)
+                    
+                    return
+                
                 default:
                     fatalError("Invalid storage kind for identifier \(name). NodeId: \(currentNodeId)")
                 }
                     
-                emit(.ldaSmi8(Int8(32)))
-                    
-                let shlAmountReg = allocRegister()
-                emit(.star(shlAmountReg))
-
-                emit(.ldaSmi32(Int32(storageKindBits)))
-                emit(.shl(shlAmountReg))
-                
-                if storageKindBits == 4 {
-                    guard let cpidx = constantsPool[name] else {
-                        fatalError("VERIFY_NOT_REACHED: Expected to find constant pool index for global variable \(name), but it was not found. NodeId: \(currentNodeId) |---> NOTE: This case must have been handled by now!")
-                    }
-                    emit(.ldaSmi32(Int32(cpidx)))
-                    
-                    return
-                }
-                emit(.ldaSmi32(Int32(slot)))
-                    
-            
+               sharedCompileTimeInfo = (storageKindBits << 48) | (depth << 32) | UInt64(slot)
         } else if mode == 2 {
             fatalError("TODO: Implement for-in/of assignment target handling for identifier \(name). NodeId: \(currentNodeId)")
         }
@@ -421,10 +519,37 @@ extension BytecodeCompiler {
 
 
     func compileMemberAssignmentTarget(currentNodeId: Int, _ object: Expression, _ property: Expression) {
-       //TODO: First, expression compiler must be implemented.
+        //TODO: First, expression compiler must be implemented.
+        walkExpression(object)
+        let objectReg = allocRegister()
+        emit(.star(objectReg))
+
+        guard case .identifier(let propName) = property else {
+            fatalError("Expected member assignment target to have an identifier as property, but got \(property). NodeId: \(currentNodeId)")
+        }
+
+        let (cpIndex, isPresentAtPool) = putRecordOnConstantsPool(propName)
+
+        if !isPresentAtPool {
+            // If the property name is not already in the constants pool, we need to emit a bytecode to put it there.
+            emit(.definePropNamed(objectReg, Bytecode.CPIndex(rawValue: UInt32(cpIndex)), 0))    
+        }
+
+        sharedCompileTimeInfo = UInt64(cpIndex) | UInt64(objectReg.rawValue) << 32 | 1<<63// Put cp index in sharedCompileTimeInfo for later use in staPropNamed bytecode emission 
 
     }
     func compileComputedMemberAssignmentTarget(currentNodeId: Int, _ object: Expression, _ propertyExpr: Expression) {
+        walkExpression(object)
+        let objectReg = allocRegister()
+        emit(.star(objectReg))
+
+        walkExpression(propertyExpr)
+        let propertyReg = allocRegister()
+        emit(.star(propertyReg))
+    }
+
+    func compileDestructuringAssignmentTarget(currentNodeId: Int, _ DestructuringPattern: DestructuringPattern) {
+        
     }
 
     //MARK: Declarations
@@ -432,13 +557,14 @@ extension BytecodeCompiler {
         let id = allocNodeId()
         switch decl {
             case .function(let name, let params, let body, let isAsync, let isGenerator):
-                break
+                compileFunctionDeclaration(currentNodeId: id, name, params, body, isAsync, isGenerator)
+                
             case .variable(let initializer):
-                break
+                compileVariableDeclaration(currentNodeId: id, initializer)
             case .lexical (let kind, let initializer):
-                break
+                compileLexicalDeclaration(currentNodeId: id, kind, initializer)
             case .class(let name, let superClass, let body):
-                break
+                compileClassDeclaration(currentNodeId: id, name, superClass, body)
             case .importDecl:
                 fatalError ("Not implemented yet")
             case .exportDecl:
@@ -450,6 +576,7 @@ extension BytecodeCompiler {
 
     }
     func compileVariableDeclaration(currentNodeId: Int, _ initializer: [VariableDeclarator]) {
+        
 
     }
     func compileLexicalDeclaration(currentNodeId: Int, _ kind: LexicalKind, _ initializer: [VariableDeclarator]) {
@@ -459,5 +586,41 @@ extension BytecodeCompiler {
     
     }
 
+    func walkVariableDeclarator(currentNodeId: Int, _ id: Pattern, _ init: Expression?) {   
+    
+    }
+
+    func walkPattern(_ pattern: Pattern) {
+        let id = allocNodeId()
+        switch pattern {
+            case .bindingIdentifier(let name):
+                compileIdentifierPattern(currentNodeId: id, name)
+            case .object(let properties):
+                compileObjectPattern(currentNodeId: id, properties)
+            case .array(let elements):
+                compileArrayPattern(currentNodeId: id, elements)
+            case .assignment(let left, let right):
+                compileAssignmentPattern(currentNodeId: id, left, right)
+            case .rest(let argument):
+                compileRestElementPattern(currentNodeId: id, argument)
+        }
+
+    }
+    func compileIdentifierPattern(currentNodeId: Int, _ name: String) {
+
+    }
+    func compileObjectPattern(currentNodeId: Int, _ properties: [ObjectPatternProperty]) {
+
+    }
+    func compileArrayPattern(currentNodeId: Int, _ elements: [ArrayPatternElement]) {  
+
+    }
+
+    func compileAssignmentPattern(currentNodeId: Int, _ left: Pattern, _ right: Expression) {
+
+    }
+    func compileRestElementPattern(currentNodeId: Int, _ argument: Pattern) {
+    
+    }
 }
     

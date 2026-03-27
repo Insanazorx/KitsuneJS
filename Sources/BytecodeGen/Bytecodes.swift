@@ -181,11 +181,15 @@ public enum Bytecode: Equatable, Hashable {
     // MARK: - 9) Compare / equality
 
     case eq(_ r: Reg)                         // "reg"
+    case neq(_ r: Reg)                        // "reg"
     case strictEq(_ r: Reg)                   // "reg"
+    case strictNeq(_ r: Reg)                  // "reg"
     case lt(_ r: Reg)                         // "reg"
     case le(_ r: Reg)                         // "reg"
     case gt(_ r: Reg)                         // "reg"
     case ge(_ r: Reg)                         // "reg"
+    case logicalAnd(_ r: Reg)                   // "reg"
+    case logicalOr(_ r: Reg)                    // "reg"
     case instanceof(_ r: Reg)                 // "reg"
     case inOp(_ r: Reg)                       // "reg"
 
