@@ -13,6 +13,10 @@ class ASTLineerizer {
         return descs
     }
 
+    func pushDescsToCU() {
+        compilationUnit.descs = descs
+    }
+
     func append(_ value: AnyNode) {
         
         compilationUnit.nodeIdToNode.append(value)
@@ -56,8 +60,6 @@ class ASTLineerizer {
             descs.append(node.justName)
         case .destructuringArrayPatternElement(let node):
             descs.append(node.justName)
-        default:
-            break;
         }
 
 

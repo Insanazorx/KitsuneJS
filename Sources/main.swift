@@ -25,30 +25,11 @@ func main() {
       
       print ("-----------------------------------")
       
-      let compilationUnit = CompilationUnit(ast: ast);
-      var astLineerizer = WalkerImpl(ASTLineerizer(ast: ast, compilationUnit: compilationUnit));
-      var scopeBuilder = WalkerImpl(ScopeBuilder(compilationUnit));
-      var declBinder = WalkerImpl(DeclBinder(compilationUnit));
-      var refBinder = WalkerImpl(RefBinder(compilationUnit));
-      var captureAnalyzer = CaptureAnalyzer(compilationUnit);
-
+     
+      var scopeAnalyzer = ScopeAnalyzer(syntaxTree: ast)
+      scopeAnalyzer.analyze()
+      scopeAnalyzer.renderDescription()
       
-      scopeBuilder.walk(node: ast)
-      astLineerizer.walk(node: ast)
-      
-
-      var nodeIdForCounting = 0
-      compilationUnit.nodeIdToScopeId.forEach {scopeId in
-        print("Node ID: \(nodeIdForCounting)-> \(astLineerizer.walker.descs[nodeIdForCounting]) -> Scope ID: \(scopeId)")
-        nodeIdForCounting += 1
-      }
-
-      declBinder.walk(node: ast)
-      refBinder.walk(node: ast)
-      
-      //captureAnalyzer.analyze()
-
-      print(compilationUnit.renderDescription())
 
       
       
@@ -56,10 +37,10 @@ func main() {
 
     do {
       var stringToWrite: String = ""
-      stringToWrite += compilationUnit.renderDescription()
+      stringToWrite += scopeAnalyzer.compilationUnit.renderDescription()
       var nodeIdForCounting = 0
-      for scopeId in compilationUnit.nodeIdToScopeId {
-        stringToWrite += "\nNode ID: \(nodeIdForCounting)-> \(astLineerizer.walker.descs[nodeIdForCounting]) -> Scope ID: \(scopeId)"
+      for scopeId in scopeAnalyzer.compilationUnit.nodeIdToScopeId {
+        stringToWrite += "\nNode ID: \(nodeIdForCounting)-> \(scopeAnalyzer.astLineerizer.walker.descs[nodeIdForCounting]) -> Scope ID: \(scopeId)"
         nodeIdForCounting += 1
       }
       try stringToWrite.write(to: fileURL2, atomically: true, encoding: .utf8)

@@ -10,7 +10,7 @@ extension CaptureAnalyzer {
     func analyze() {
     
     var currentBoundRefIndex = 0
-    for var boundRef in compilationUnit.boundRefs {
+    boundRefLoop: for var boundRef in compilationUnit.boundRefs {
         if boundRef.bindingId != nil{
             currentBoundRefIndex += 1
             continue
@@ -23,8 +23,9 @@ extension CaptureAnalyzer {
             boundRef.bindingId = maybeBindingId
             boundRef.storageKind = .lexical
             compilationUnit.boundRefs[currentBoundRefIndex] = boundRef
+            
             currentBoundRefIndex += 1
-            continue
+            continue boundRefLoop
         }
 
         
@@ -34,7 +35,7 @@ extension CaptureAnalyzer {
         var currentScope: Scope = findScopeOfNode(nodeId: boundRef.refNodeId)
         
         while currentScope.id != 0 {
-            
+
             guard let scopeIdToScan = currentScope.parentId else {
                 fatalError("Scope with id \(currentScope.id) has no parent scope, but it is not the global scope.")
             }
@@ -52,15 +53,34 @@ extension CaptureAnalyzer {
                     boundRef.isCaptured = true
                     boundRef.bindingId = maybeBindingId
                     boundRef.storageKind = .context
+                    boundRef.capturingDepth = depth
+
                     compilationUnit.boundRefs[currentBoundRefIndex] = boundRef
-                    continue
+                    
+                    currentBoundRefIndex += 1
+                    continue boundRefLoop
                 }
 
+            }
+
+            if case .global = currentScope.kind {
+                boundRef.bindingId = compilationUnit.getBindingIdByName(name: boundRef.name, scopeId: currentScope.id)
+                boundRef.isCaptured = true
+                boundRef.storageKind = .global
+                boundRef.capturingDepth = depth
+
+                compilationUnit.boundRefs[currentBoundRefIndex] = boundRef
+
+                currentBoundRefIndex += 1
+                continue boundRefLoop
+            
             }
 
             if let bindingId = compilationUnit.getBindingIdByName(name: boundRef.name, scopeId: currentScope.id) {
                 boundRef.isCaptured = depth > 0
                 boundRef.bindingId = bindingId
+                boundRef.capturingDepth = depth
+
                 if boundRef.isCaptured {
                     boundRef.storageKind = .context
                 } else {
@@ -68,32 +88,28 @@ extension CaptureAnalyzer {
                 }
 
                 compilationUnit.boundRefs[currentBoundRefIndex] = boundRef
+                
+                currentBoundRefIndex += 1
+                continue boundRefLoop
+            
             } else {continue}
         }
 
-        if currentScope.id == 0 && compilationUnit.boundRefs[currentBoundRefIndex].bindingId == nil {
-            // Handle the case where the bound reference is not found in any scope
-            fatalError("TODO: throw parser error for unresolved reference: \(boundRef.name) at node ID \(boundRef.refNodeId)")
         }
 
         currentBoundRefIndex += 1
-        }
-
     }
 
     func findScopeOfNode(nodeId: Int) -> Scope {
-
-        //Little trick here (nodeIdToScopeId[nodeId] + 1):
-        //Because owner function itself is not included in its own scope's nodeIdToScopeId mapping,
-        //but it is included in the parent scope's nodeIdToScopeId mapping. function scope must have the 
-        //successor scopeId of its owner.
-        return compilationUnit.scopes[compilationUnit.nodeIdToScopeId[nodeId] + 1] 
+        return compilationUnit.scopes[compilationUnit.nodeIdToScopeId[nodeId]] 
     }
+
+
 
     func lookupForFunctionParams(boundRef: BoundRef, fromScopeId scopeId: Int) -> Int? {
 
         guard let funcNodeId = compilationUnit.scopes[scopeId].ownerFunctionId else {
-            fatalError("VERIFY NOT REACHED: lookupForFunctionParams should only be called for scopes that are owned by a function, but scope with id \(scopeId) has no ownerFunctionId.")
+            return nil
         }
 
         if let paramsScopeId = findFunctionParamsScopeId(funcNodeId: funcNodeId) {
@@ -105,7 +121,7 @@ extension CaptureAnalyzer {
     }
 
     func findFunctionParamsScopeId(funcNodeId: Int) -> Int? {
-        let funcScope = findScopeOfNode(nodeId: funcNodeId)
+        let funcScope = findScopeOfNodeForParams(nodeId: funcNodeId)
         for child in funcScope.childIds {
             if compilationUnit.scopes[child].kind == .param {
                 return child
@@ -114,6 +130,14 @@ extension CaptureAnalyzer {
         return nil
     }
 
+    func findScopeOfNodeForParams(nodeId: Int) -> Scope {
+
+        //Little trick here (nodeIdToScopeId[nodeId] + 1):
+        //Because owner function itself is not included in its own scope's nodeIdToScopeId mapping,
+        //but it is included in the parent scope's nodeIdToScopeId mapping. function scope must have the 
+        //successor scopeId of its owner.
+        return compilationUnit.scopes[compilationUnit.nodeIdToScopeId[nodeId] + 1] 
+    }
 
 
 }

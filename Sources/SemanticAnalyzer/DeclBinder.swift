@@ -17,7 +17,8 @@ public struct Binding {
     var declNodeId: Int 
     var declOrder: Int // Şimdilik direk nodeId ye eşit olabilir, çünkü nodeId ler zaten sıralı ve benzersiz. Ancak ileride farklı bir ID sistemi gelirse diye ayrı bir sayaç tutmak mantıklı olabilir!
 
-    // StorageType
+    var slot: Int? = nil
+    
 
     var mutable: Bool = false 
     var has_tdz: Bool = false
@@ -91,7 +92,7 @@ extension DeclBinder: NodeWalker {
     }
 
     public func handleDeclIdentifier(nodeId: Int, name: String) {
-          // For class and function decl or expr, identifier is handled in its own handler.
+        // For class and function decl or expr, identifier is handled in its own handler.
         
         let kind: BindingKind = if let currentContext = bindingContextStack.last {
                 currentContext

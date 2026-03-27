@@ -81,6 +81,7 @@ extension RefBinder: NodeWalker {
     }
 
     public func handleRefIdentifier(nodeId: Int, name: String) {
+        
         let kind: RefKind = if let currentContext = refContextStack.last {
             currentContext
         } else {
@@ -89,12 +90,14 @@ extension RefBinder: NodeWalker {
 
         let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
         let bindingId = compilationUnit.getBindingIdByName(name: name, scopeId: scopeId)
+        let storageKind: StorageKind = bindingId != nil ? .lexical : .unknown
         let boundRef = BoundRef(
             refNodeId: nodeId,
             name: name,
             kind: kind,
             bindingId: bindingId,
             refScopeId: scopeId,
+            storageKind: storageKind,
             resolution: .unresolved, // Will be updated during resolution in Resolver phase
             diagnostics: [] // Will be filled during resolution in Resolver phase
         )
@@ -117,16 +120,19 @@ extension RefBinder: NodeWalker {
     public func preExpr(nodeId: Int, node: Expression) -> Bool {
         switch node {
         case .identifier(let name):
+
             handleIdentifier(nodeId: nodeId, name: name, isDecl: false)
+            
         case .privateIdentifier(let name):
             handleIdentifier(nodeId: nodeId, name: name, isDecl: false)
         
         case .assignment:
-            enterContext(kind: .Write)
+            enterContext(kind: .Read)
+            
         
         case .binary (_, let op, _)
             where op == .binaryOp(.plusAssign) || op == .binaryOp(.minusAssign) || op == .binaryOp(.multiplyAssign) || op == .binaryOp(.divideAssign) :
-            enterContext(kind: .Write)
+            enterContext(kind: .Read)
 
         case .binary:
             enterContext(kind: .Read) 
@@ -142,7 +148,7 @@ extension RefBinder: NodeWalker {
         case .unary (let op,_,_) 
             where op == .unaryOp(.typeof):
                 enterContext(kind: .Typeof)
-
+        
         default:
             break;
         
@@ -168,6 +174,7 @@ extension RefBinder: NodeWalker {
             case .unary (let op,_,_)
                 where op == .unaryOp(.typeof):
                 exitContext()
+                
             default:
                 break;
         }
@@ -182,6 +189,14 @@ extension RefBinder: NodeWalker {
                 enterContext(kind: .ForInOf)
         }
         return true
+    }
+
+    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
+        return true
+    }
+
+    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
+    
     }
 
 
@@ -247,14 +262,6 @@ extension RefBinder: NodeWalker {
     }
 
     public func postPattern(nodeId: Int, node: Pattern) {
-        
-    }
-
-    public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
-        return true
-    }
-
-    public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
         
     }
 

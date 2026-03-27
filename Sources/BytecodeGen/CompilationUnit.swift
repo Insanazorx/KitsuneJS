@@ -13,6 +13,7 @@ public class CompilationUnit {
 
     public var nodeIdToScopeId: [Int] = []
     public var nodeIdToNode: [AnyNode] = []
+    public var descs: [String] = []
     
 
     public init(ast: ASTNode) {
@@ -21,6 +22,32 @@ public class CompilationUnit {
 }
 
 extension CompilationUnit {
+
+    func getBindingByNodeId(nodeId: Int) -> Binding {
+        
+        let scopeId = nodeIdToScopeId[nodeId] 
+        
+        let scope = scopes[scopeId]
+        
+        if let bindingId = scope.bindings.first(where: { bindings[$0].declNodeId == nodeId }) {
+            return bindings[bindingId]
+        }
+        
+        fatalError("There must have been a binding for this nodeId, but none was found. NodeId: \(nodeId), ScopeId: \(scopeId)")
+    }
+
+    func getBoundRefByNodeId(nodeId: Int) -> BoundRef {
+        
+        let scopeId = nodeIdToScopeId[nodeId] 
+        
+        let scope = scopes[scopeId]
+        
+        if let refId = scope.boundRefs.first(where: { boundRefs[$0].refNodeId == nodeId }) {
+            return boundRefs[refId]
+        }
+        
+        fatalError("There must have been a bound reference for this nodeId, but none was found. NodeId: \(nodeId), ScopeId: \(scopeId)")
+    }
 
     public func findScopeById(_ id: Int) -> Scope? {
         return scopes.first(where: { $0.id == id } )
@@ -41,7 +68,6 @@ extension CompilationUnit {
     func addBindingToScopeByLookingAstId(nodeId: Int, bindingId: Int) {
         scopes[nodeIdToScopeId[nodeId]].bindings.append(bindingId)
     }
-
 
     func addRefToScopeByLookingAstId(nodeId: Int) { // refId
         scopes[nodeIdToScopeId[nodeId]].boundRefs.append(nodeId)
@@ -84,6 +110,14 @@ extension CompilationUnit {
 }
 
 extension CompilationUnit{
+    public func printLinearizedAST() {
+        var nodeIdForCounting = 0
+        nodeIdToScopeId.forEach {scopeId in
+            print("Node ID: \(nodeIdForCounting)-> \(descs[nodeIdForCounting]) -> Scope ID: \(scopeId)")
+            nodeIdForCounting += 1
+        }
+    }
+
     public func renderDescription() -> String {
         return scopes[0].renderDescription(self, simplified: true)
     } 
@@ -177,6 +211,7 @@ extension Binding {
         box("Binding \(declOrder)", [
             box("name: \(name)"),
             box("kind: \(kind)"),
+    
         ])
     }
 
@@ -185,6 +220,7 @@ extension Binding {
         box("Binding \(declOrder)", [
             box("name: \(name)"),
             box("kind: \(kind)"),
+            box("slot: \(slot.map(String.init) ?? "nil")"),
             box("scopeId: \(scopeId)"),
             box("declNodeId: \(declNodeId)"),
             box("declOrder: \(declOrder)"),

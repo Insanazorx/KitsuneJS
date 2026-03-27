@@ -2,245 +2,52 @@ Scope 0
 ├─ kind: global
 ├─ ownerFunction: nil
 ├─ bindings
-│  ├─ Binding 0
-│  │  ├─ name: a
-│  │  └─ kind: variable
-│  ├─ Binding 1
-│  │  ├─ name: outerFn
-│  │  └─ kind: function
-│  └─ Binding 14
-│     ├─ name: b
+│  └─ Binding 0
+│     ├─ name: a
 │     └─ kind: lexical(isConst: false)
 ├─ boundRefs
-│  └─ <empty>
+│  ├─ BoundRef 14
+│  │  ├─ name: a
+│  │  ├─ kind: Read
+│  │  ├─ bindingId: 0
+│  │  ├─ captureDepth: 0
+│  │  └─ storageKind: lexical
+│  ├─ BoundRef 17
+│  │  ├─ name: d
+│  │  ├─ kind: Read
+│  │  ├─ bindingId: nil
+│  │  ├─ captureDepth: 0
+│  │  └─ storageKind: unknown
+│  └─ BoundRef 22
+│     ├─ name: a
+│     ├─ kind: Read
+│     ├─ bindingId: 0
+│     ├─ captureDepth: 0
+│     └─ storageKind: lexical
 └─ children
-   └─ Scope 1
-      ├─ kind: function
-      ├─ ownerFunction: nil
-      ├─ bindings
-      │  └─ <empty>
-      ├─ boundRefs
-      │  └─ <empty>
-      └─ children
-         ├─ Scope 2
-         │  ├─ kind: param
-         │  ├─ ownerFunction: 7
-         │  ├─ bindings
-         │  │  ├─ Binding 2
-         │  │  │  ├─ name: f
-         │  │  │  └─ kind: param
-         │  │  ├─ Binding 3
-         │  │  │  ├─ name: g
-         │  │  │  └─ kind: param
-         │  │  └─ Binding 4
-         │  │     ├─ name: h
-         │  │     └─ kind: param
-         │  ├─ boundRefs
-         │  │  └─ <empty>
-         │  └─ children
-         │     └─ <empty>
-         └─ Scope 3
-            ├─ kind: block
-            ├─ ownerFunction: 7
-            ├─ bindings
-            │  ├─ Binding 5
-            │  │  ├─ name: outerVar
-            │  │  └─ kind: variable
-            │  ├─ Binding 6
-            │  │  ├─ name: outerConst
-            │  │  └─ kind: lexical(isConst: true)
-            │  └─ Binding 7
-            │     ├─ name: innerBlockFn
-            │     └─ kind: function
-            ├─ boundRefs
-            │  └─ BoundRef 21
-            │     ├─ name: b
-            │     ├─ kind: Read
-            │     ├─ bindingId: nil
-            │     ├─ captureDepth: 0
-            │     └─ storageKind: unknown
-            └─ children
-               └─ Scope 4
-                  ├─ kind: function
-                  ├─ ownerFunction: 7
-                  ├─ bindings
-                  │  └─ <empty>
-                  ├─ boundRefs
-                  │  └─ <empty>
-                  └─ children
-                     ├─ Scope 5
-                     │  ├─ kind: param
-                     │  ├─ ownerFunction: 23
-                     │  ├─ bindings
-                     │  │  ├─ Binding 8
-                     │  │  │  ├─ name: p
-                     │  │  │  └─ kind: param
-                     │  │  ├─ Binding 9
-                     │  │  │  ├─ name: x
-                     │  │  │  └─ kind: param
-                     │  │  └─ Binding 10
-                     │  │     ├─ name: y
-                     │  │     └─ kind: param
-                     │  ├─ boundRefs
-                     │  │  └─ <empty>
-                     │  └─ children
-                     │     └─ <empty>
-                     └─ Scope 6
-                        ├─ kind: block
-                        ├─ ownerFunction: 23
-                        ├─ bindings
-                        │  ├─ Binding 11
-                        │  │  ├─ name: innerVar
-                        │  │  └─ kind: variable
-                        │  ├─ Binding 12
-                        │  │  ├─ name: innerVar2
-                        │  │  └─ kind: variable
-                        │  └─ Binding 13
-                        │     ├─ name: innerConst
-                        │     └─ kind: lexical(isConst: true)
-                        ├─ boundRefs
-                        │  ├─ BoundRef 38
-                        │  │  ├─ name: outerVar
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 39
-                        │  │  ├─ name: outerConst
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 44
-                        │  │  ├─ name: a
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 51
-                        │  │  ├─ name: f
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 52
-                        │  │  ├─ name: g
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 53
-                        │  │  ├─ name: h
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 60
-                        │  │  ├─ name: p
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 61
-                        │  │  ├─ name: x
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 62
-                        │  │  ├─ name: y
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: nil
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 63
-                        │  │  ├─ name: innerVar
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: 11
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  ├─ BoundRef 64
-                        │  │  ├─ name: innerVar2
-                        │  │  ├─ kind: Read
-                        │  │  ├─ bindingId: 12
-                        │  │  ├─ captureDepth: 0
-                        │  │  └─ storageKind: unknown
-                        │  └─ BoundRef 65
-                        │     ├─ name: innerConst
-                        │     ├─ kind: Read
-                        │     ├─ bindingId: 13
-                        │     ├─ captureDepth: 0
-                        │     └─ storageKind: unknown
-                        └─ children
-                           └─ <empty>
+   └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
-Node ID: 2-> VariableDeclaration -> Scope ID: 0
+Node ID: 2-> LexicalDeclaration -> Scope ID: 0
 Node ID: 3-> VariableDeclarator -> Scope ID: 0
 Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
-Node ID: 5-> Literal -> Scope ID: 0
-Node ID: 6-> DeclarationStatement -> Scope ID: 0
-Node ID: 7-> FunctionDeclaration ("outerFn") -> Scope ID: 0
-Node ID: 8-> BindingIdentifier ("f") -> Scope ID: 2
-Node ID: 9-> BindingIdentifier ("g") -> Scope ID: 2
-Node ID: 10-> BindingIdentifier ("h") -> Scope ID: 2
-Node ID: 11-> BlockStatement -> Scope ID: 1
-Node ID: 12-> DeclarationStatement -> Scope ID: 3
-Node ID: 13-> VariableDeclaration -> Scope ID: 3
-Node ID: 14-> VariableDeclarator -> Scope ID: 3
-Node ID: 15-> BindingIdentifier ("outerVar") -> Scope ID: 3
-Node ID: 16-> Literal -> Scope ID: 3
-Node ID: 17-> DeclarationStatement -> Scope ID: 3
-Node ID: 18-> LexicalDeclaration -> Scope ID: 3
-Node ID: 19-> VariableDeclarator -> Scope ID: 3
-Node ID: 20-> BindingIdentifier ("outerConst") -> Scope ID: 3
-Node ID: 21-> Identifier ("b") -> Scope ID: 3
-Node ID: 22-> DeclarationStatement -> Scope ID: 3
-Node ID: 23-> FunctionDeclaration ("innerBlockFn") -> Scope ID: 3
-Node ID: 24-> AssignmentPattern -> Scope ID: 5
-Node ID: 25-> BindingIdentifier ("p") -> Scope ID: 5
-Node ID: 26-> Literal -> Scope ID: 5
-Node ID: 27-> ObjectPattern -> Scope ID: 5
-Node ID: 28-> ObjectPatternShorthandProperty -> Scope ID: 5
-Node ID: 29-> ObjectPatternProperty -> Scope ID: 5
-Node ID: 30-> IdentifierPropertyKey ("z") -> Scope ID: 5
-Node ID: 31-> BindingIdentifier ("y") -> Scope ID: 5
-Node ID: 32-> BlockStatement -> Scope ID: 4
-Node ID: 33-> DeclarationStatement -> Scope ID: 6
-Node ID: 34-> VariableDeclaration -> Scope ID: 6
-Node ID: 35-> VariableDeclarator -> Scope ID: 6
-Node ID: 36-> BindingIdentifier ("innerVar") -> Scope ID: 6
-Node ID: 37-> BinaryExpression -> Scope ID: 6
-Node ID: 38-> Identifier ("outerVar") -> Scope ID: 6
-Node ID: 39-> Identifier ("outerConst") -> Scope ID: 6
-Node ID: 40-> DeclarationStatement -> Scope ID: 6
-Node ID: 41-> VariableDeclaration -> Scope ID: 6
-Node ID: 42-> VariableDeclarator -> Scope ID: 6
-Node ID: 43-> BindingIdentifier ("innerVar2") -> Scope ID: 6
-Node ID: 44-> Identifier ("a") -> Scope ID: 6
-Node ID: 45-> DeclarationStatement -> Scope ID: 6
-Node ID: 46-> LexicalDeclaration -> Scope ID: 6
-Node ID: 47-> VariableDeclarator -> Scope ID: 6
-Node ID: 48-> BindingIdentifier ("innerConst") -> Scope ID: 6
-Node ID: 49-> BinaryExpression -> Scope ID: 6
-Node ID: 50-> BinaryExpression -> Scope ID: 6
-Node ID: 51-> Identifier ("f") -> Scope ID: 6
-Node ID: 52-> Identifier ("g") -> Scope ID: 6
-Node ID: 53-> Identifier ("h") -> Scope ID: 6
-Node ID: 54-> ReturnStatement -> Scope ID: 6
-Node ID: 55-> BinaryExpression -> Scope ID: 6
-Node ID: 56-> BinaryExpression -> Scope ID: 6
-Node ID: 57-> BinaryExpression -> Scope ID: 6
-Node ID: 58-> BinaryExpression -> Scope ID: 6
-Node ID: 59-> BinaryExpression -> Scope ID: 6
-Node ID: 60-> Identifier ("p") -> Scope ID: 6
-Node ID: 61-> Identifier ("x") -> Scope ID: 6
-Node ID: 62-> Identifier ("y") -> Scope ID: 6
-Node ID: 63-> Identifier ("innerVar") -> Scope ID: 6
-Node ID: 64-> Identifier ("innerVar2") -> Scope ID: 6
-Node ID: 65-> Identifier ("innerConst") -> Scope ID: 6
-Node ID: 66-> DeclarationStatement -> Scope ID: 0
-Node ID: 67-> LexicalDeclaration -> Scope ID: 0
-Node ID: 68-> VariableDeclarator -> Scope ID: 0
-Node ID: 69-> BindingIdentifier ("b") -> Scope ID: 0
-Node ID: 70-> Literal -> Scope ID: 0
+Node ID: 5-> ObjectLiteral -> Scope ID: 0
+Node ID: 6-> ObjectProperty -> Scope ID: 0
+Node ID: 7-> IdentifierPropertyKey ("b") -> Scope ID: 0
+Node ID: 8-> Literal -> Scope ID: 0
+Node ID: 9-> ExpressionStatement -> Scope ID: 0
+Node ID: 10-> AssignmentExpression -> Scope ID: 0
+Node ID: 11-> ComputedMemberAssignmentTarget -> Scope ID: 0
+Node ID: 12-> MemberExpression -> Scope ID: 0
+Node ID: 13-> MemberExpression -> Scope ID: 0
+Node ID: 14-> Identifier ("a") -> Scope ID: 0
+Node ID: 15-> Identifier ("d") -> Scope ID: 0
+Node ID: 16-> Literal -> Scope ID: 0
+Node ID: 17-> ExpressionStatement -> Scope ID: 0
+Node ID: 18-> AssignmentExpression -> Scope ID: 0
+Node ID: 19-> MemberAssignmentTarget -> Scope ID: 0
+Node ID: 20-> Identifier ("a") -> Scope ID: 0
+Node ID: 21-> ObjectLiteral -> Scope ID: 0
+Node ID: 22-> ObjectProperty -> Scope ID: 0
+Node ID: 23-> IdentifierPropertyKey ("c") -> Scope ID: 0
+Node ID: 24-> Literal -> Scope ID: 0

@@ -130,6 +130,24 @@ public struct WalkerImpl<Walker: NodeWalker> {
         
     } 
 
+    mutating func walkMemberProperty(_ property: Expression) {
+    let pid = allocNodeId()
+
+        switch property {
+        case .identifier(let name):
+            // obj.a  -> "a" property key'dir, lexical ref değildir
+            walkIdentifier(nodeId: pid, name: name)
+
+        case .privateIdentifier(let name):
+            // #x gibi isimleri de ref yapmadan sadece gez
+            walkIdentifier(nodeId: pid, name: name)
+
+        default:
+            // Beklenmedik bir şekil varsa yine de walk et
+            walkExpression(property)
+        }
+    }
+
 
     mutating func walkStatement(_ stmt: Statement) {
         let sid = allocNodeId()
@@ -343,7 +361,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
             
             case .member(let object,let property):
                 walkExpression(object)
-                walkExpression(property)
+                walkMemberProperty(property)
 
             case .computedMember(let object, let property):
                 walkExpression(object)
@@ -816,7 +834,7 @@ public struct WalkerImpl<Walker: NodeWalker> {
             walkRefIdentifier(nodeId: targetId, name: name)
         case .member(let object, let property):
             walkExpression(object)
-            walkExpression(property)
+            walkMemberProperty(property)
 
         case .computedMember(let object, let property):
             walkExpression(object)

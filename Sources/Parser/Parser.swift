@@ -824,7 +824,6 @@ extension Parser : Parsers {
                     var tempIndex = currentIdx
                     var parenCount = 1
                     while parenCount > 0 && tempIndex < tokens.count {
-                        tempIndex += 1
                         if tempIndex >= tokens.count {
                             return false
                         }
@@ -834,11 +833,10 @@ extension Parser : Parsers {
                             case .rightParen:
                                 parenCount -= 1
                             default:
-                                continue
+                                break
                         }
+                        tempIndex += 1
                     }
-                    
-                    tempIndex += 1
 
                     if case .arrow = tokens[tempIndex].tokenType {
                         return true
@@ -911,6 +909,7 @@ extension Parser : Parsers {
                 let simulationResult = simulateWhetherParentesizedExpressionIsArrowFunctionArg(currentTokenIndex, tokens)
 
                 if simulationResult {
+                    
                     var patterns: [Pattern] = []
                     while currentToken()?.tokenType != .rightParen {
                         if let param = try parsePattern() {

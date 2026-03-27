@@ -441,7 +441,7 @@ extension Expression: CustomStringConvertible {
 
         case .functionExpression(let name, let params, let body, let isAsync, let isGenerator):
             return box("Expression.functionExpression", [
-                box("name: \(name ?? "<no name>"))"),
+                box("name: \(name ?? "<no name>")"),
                 boxListOpt("params", params?.map { $0.toTreeBox() }),
                 box("async: \(isAsync)"),
                 box("generator: \(isGenerator)"),
@@ -450,7 +450,7 @@ extension Expression: CustomStringConvertible {
 
         case .classExpression(let name, let superClass, let body):
             return box("Expression.classExpression", [
-                box("name: \(name ?? "<no name>"))"),
+                box("name: \(name ?? "<no name>")"),
                 boxOpt("superClass", superClass?.toTreeBox()),
                 boxList("body", body.map { $0.toTreeBox() })
             ])
