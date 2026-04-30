@@ -2,57 +2,20 @@ Scope 0
 ├─ kind: global
 ├─ ownerFunction: nil
 ├─ bindings
-│  ├─ Binding 0
-│  │  ├─ name: a
-│  │  └─ kind: lexical(isConst: false)
-│  └─ Binding 1
-│     ├─ name: b
+│  └─ Binding 0
+│     ├─ name: c
 │     └─ kind: lexical(isConst: false)
 ├─ boundRefs
-│  ├─ BoundRef 14
-│  │  ├─ name: a
-│  │  ├─ kind: Read
-│  │  ├─ bindingId: 0
-│  │  ├─ captureDepth: 0
-│  │  └─ storageKind: lexical
-│  ├─ BoundRef 17
-│  │  ├─ name: b
-│  │  ├─ kind: Read
-│  │  ├─ bindingId: 1
-│  │  ├─ captureDepth: 0
-│  │  └─ storageKind: lexical
-│  ├─ BoundRef 19
-│  │  ├─ name: a
-│  │  ├─ kind: Read
-│  │  ├─ bindingId: 0
-│  │  ├─ captureDepth: 0
-│  │  └─ storageKind: lexical
-│  └─ BoundRef 20
-│     ├─ name: b
-│     ├─ kind: Read
-│     ├─ bindingId: 1
-│     ├─ captureDepth: 0
-│     └─ storageKind: lexical
+│  └─ <empty>
 └─ children
    └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
 Node ID: 2-> LexicalDeclaration -> Scope ID: 0
 Node ID: 3-> VariableDeclarator -> Scope ID: 0
-Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
-Node ID: 5-> Literal -> Scope ID: 0
-Node ID: 6-> DeclarationStatement -> Scope ID: 0
-Node ID: 7-> LexicalDeclaration -> Scope ID: 0
-Node ID: 8-> VariableDeclarator -> Scope ID: 0
-Node ID: 9-> BindingIdentifier ("b") -> Scope ID: 0
-Node ID: 10-> BinaryExpression -> Scope ID: 0
-Node ID: 11-> Literal -> Scope ID: 0
-Node ID: 12-> BinaryExpression -> Scope ID: 0
-Node ID: 13-> Literal -> Scope ID: 0
-Node ID: 14-> Identifier ("a") -> Scope ID: 0
-Node ID: 15-> ExpressionStatement -> Scope ID: 0
-Node ID: 16-> AssignmentExpression -> Scope ID: 0
-Node ID: 17-> IdentifierAssignmentTarget ("b") -> Scope ID: 0
-Node ID: 18-> BinaryExpression -> Scope ID: 0
-Node ID: 19-> Identifier ("a") -> Scope ID: 0
-Node ID: 20-> Identifier ("b") -> Scope ID: 0
+Node ID: 4-> BindingIdentifier ("c") -> Scope ID: 0
+Node ID: 5-> BinaryExpression -> Scope ID: 0
+Node ID: 6-> Literal -> Scope ID: 0
+Node ID: 7-> BinaryExpression -> Scope ID: 0
+Node ID: 8-> Literal -> Scope ID: 0
+Node ID: 9-> Literal -> Scope ID: 0

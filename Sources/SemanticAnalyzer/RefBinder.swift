@@ -90,7 +90,13 @@ extension RefBinder: NodeWalker {
 
         let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
         let bindingId = compilationUnit.getBindingIdByName(name: name, scopeId: scopeId)
-        let storageKind: StorageKind = bindingId != nil ? .lexical : .unknown
+        var storageKind: StorageKind = bindingId != nil ? .lexical : .unknown
+        
+        // sonradan ekledim
+        if scopeId == 0 && bindingId != nil {
+            storageKind = .global
+        }
+
         let boundRef = BoundRef(
             refNodeId: nodeId,
             name: name,

@@ -61,9 +61,15 @@ public enum DestructuringObjectProperty {
 public indirect enum Pattern {
     case bindingIdentifier(String)
     case object(properties: [ObjectPatternProperty])
-    case array(elements: [ArrayPatternElement])           // elision için nil
+    case array(elements: [ArrayPatternElement])           
     case rest(Pattern)                         // ...x
     case assignment(left: Pattern, defaultValue: Expression)  // x = expr
+}
+
+
+public enum ArrayPatternElement {
+    case pattern(Pattern)
+    case elision
 }
 
 public enum DestructuringArrayPatternElement {
@@ -122,10 +128,7 @@ public indirect enum Expression {
 }
 
 
-public enum ArrayPatternElement {
-    case pattern(Pattern)
-    case elision
-}
+
 
 public enum ArrayElement {
   case element(Expression)     // normal

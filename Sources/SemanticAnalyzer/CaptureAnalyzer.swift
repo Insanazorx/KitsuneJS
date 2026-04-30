@@ -15,7 +15,7 @@ extension CaptureAnalyzer {
             currentBoundRefIndex += 1
             continue
         }
- 
+    
         //look up nearest owner function with seeking its parameters first.
 
         if let maybeBindingId = lookupForFunctionParams(boundRef: boundRef, fromScopeId: boundRef.refScopeId) {

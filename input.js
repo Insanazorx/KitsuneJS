@@ -1,13 +1,4 @@
-let a = 10;
-let b = 20 + 3 * a;
-b = a + b;
-
-
-
-
-
-
-
+let c = 3 + 5 * 2;
 
 /*
 var global1 = 10

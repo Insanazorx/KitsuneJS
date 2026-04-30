@@ -30,10 +30,20 @@ func main() {
       scopeAnalyzer.analyze()
       scopeAnalyzer.renderDescription()
       
+      print ("-----------------------------------")
 
+      var compiler = BytecodeCompiler(compilationUnit: scopeAnalyzer.compilationUnit)
+      compiler.compile()
+      compiler.printCompilationResult()
       
-      
-    let fileURL2 = URL(fileURLWithPath: "output.txt")
+      } catch {
+        print("Parsing error: \(error)");
+    }
+}
+main();
+
+
+    /*let fileURL2 = URL(fileURLWithPath: "output.txt")
 
     do {
       var stringToWrite: String = ""
@@ -47,15 +57,4 @@ func main() {
       print("Output written to output.txt")
     } catch {
       print("Hata:", error)
-    }
-      
-      
-    } catch {
-        print("Parsing error: \(error)");
-    }
-
-
-    
-}
-
-main();
+    }*/
