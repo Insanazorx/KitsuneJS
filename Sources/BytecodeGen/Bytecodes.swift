@@ -70,9 +70,15 @@ public enum Bytecode: Equatable, Hashable {
         public init(rawValue: UInt16) { self.rawValue = rawValue }
     }
 
-    public struct JumpOffset: Equatable, Hashable, RawRepresentable, Sendable {
-        public let rawValue: Int32
-        public init(rawValue: Int32) { self.rawValue = rawValue }
+    public enum OffsetOption: Equatable, Hashable, Sendable {
+        case rawOffset(Int32)
+        case backpatchRef(Int)
+    }
+
+    public struct JumpOffset: Equatable, Hashable, Sendable, RawRepresentable {
+        
+        public let rawValue: OffsetOption
+        public init(rawValue: OffsetOption) { self.rawValue = rawValue }
     }
 
     public struct ArgCount: Equatable, Hashable, RawRepresentable, Sendable {
@@ -132,6 +138,11 @@ public enum Bytecode: Equatable, Hashable {
     case debugDumpIC(ICSlot)
     case unreachable
     case halt
+
+    // MARK: - Start markers
+
+    case enterGlobal
+    case enterFunction
 
     // MARK: - Register movement
 
@@ -205,7 +216,7 @@ public enum Bytecode: Equatable, Hashable {
     case putContext(depth: ContextDepth, slot: ContextSlot, src: Reg)
     case checkTDZContext(depth: ContextDepth, slot: ContextSlot)
     
-    //for eval and with
+    //for "eval" and "with"
     case materializeScope(dst: Reg, depth: ContextDepth)
 
     //TODO: for low level access to context slots 
@@ -485,20 +496,77 @@ public enum Bytecode: Equatable, Hashable {
         flags: PropertyFlags
     )
 
-    // MARK: - Async / await
+    // MARK: - Promises / microtasks
 
-    case asyncEnter
-    case await(dst: Reg, value: Reg, resumePoint: UInt16)
-    case asyncReturn(value: Reg)
-    case asyncThrow(value: Reg)
+    /// Allocate the promise capability returned by an async function.
+    /// The VM/runtime owns the resolve/reject functions associated with it.
+    case createPromise(dst: Reg)
 
-    // MARK: - Generators
+    /// Resolve/reject an existing promise capability. In a JSC-like lowering,
+    /// async return/throw should compile to these plus returnValue of the promise.
+    case fulfillPromise(promise: Reg, value: Reg)
+    case rejectPromise(promise: Reg, reason: Reg)
+
+    /// Promise.resolve(value), used by await lowering before installing reactions.
+    case promiseResolve(dst: Reg, value: Reg)
+
+    /// Install continuation callbacks for await. The continuation function/state
+    /// is normally a VM-created closure that resumes the suspended async frame.
+    case promiseThen(dst: Reg, promise: Reg, onFulfilled: Reg, onRejected: Reg?)
+
+    /// Queue a job into the VM microtask queue. Most frontend code should prefer
+    /// runtimeCall/intrinsicCall helpers, but keeping this explicit is useful for
+    /// learning the async continuation pipeline.
+    case enqueueMicrotask(job: Reg)
+
+    // MARK: - Async lowering
+
+    /// Enter an async function body. The surrounding function object should already
+    /// have an associated promise capability and resumable frame metadata.
+    case asyncEnter(promise: Reg)
+
+    /// Lowered await operation: stores the current frame state, converts value to
+    /// a promise/reaction through runtime support, and suspends at resumePoint.
+    /// This is lower-level than a pure semantic `await` opcode, but still compact.
+    case awaitSuspend(value: Reg, promise: Reg, resumePoint: UInt16)
+
+    /// Resume marker for an async continuation. The VM should restore the suspended
+    /// frame and expose either a normal value or a thrown reason through resume state.
+    case asyncResumePoint(UInt16)
+
+    // MARK: - Generators / resumable frames
+
+    public enum ResumeKind: UInt8, Equatable, Hashable, Sendable {
+        case normal = 0
+        case `throw` = 1
+        case `return` = 2
+    }
+
+    case createGeneratorObject(dst: Reg, function: FunctionID)
+    case createAsyncGeneratorObject(dst: Reg, function: FunctionID)
 
     case generatorEnter
-    case yield(dst: Reg, value: Reg, resumePoint: UInt16)
+
+    /// Read the value/kind sent by generator.next/throw/return when resuming.
+    case getResumeValue(dst: Reg)
+    case getResumeKind(dst: Reg)
+    case jumpIfResumeKind(kind: ResumeKind, offset: JumpOffset)
+
+    /// Save the current generator frame and yield value to the caller.
+    case generatorSuspend(dst: Reg, value: Reg, resumePoint: UInt16)
+
+    /// Async generators need a separate yield path because the yielded value is
+    /// coupled to the async generator request queue and promise resolution.
+    case asyncGeneratorSuspend(dst: Reg, value: Reg, resumePoint: UInt16)
+
     case yieldStar(dst: Reg, iterator: Reg, resumePoint: UInt16)
+
+    /// Completion paths for generator/async-generator frames.
     case generatorReturn(value: Reg)
     case generatorThrow(value: Reg)
+    case asyncGeneratorReturn(value: Reg)
+    case asyncGeneratorThrow(value: Reg)
+
     case resumePoint(UInt16)
 
     // MARK: - Profiling / speculation hooks
@@ -559,6 +627,12 @@ extension Bytecode: CustomStringConvertible {
             return "unreachable"
         case .halt:
             return "halt"
+        
+        case .enterGlobal:
+            return "enterGlobal"
+        case .enterFunction:
+            return "enterFunction"
+        
         case .move(let dst, let src):
             return "move r\(dst.rawValue), r\(src.rawValue)"
         case .clearReg(let reg):
@@ -1209,24 +1283,54 @@ extension Bytecode: CustomStringConvertible {
             return "defineInstanceField r\(thisValue.rawValue), cp[\(name.rawValue)], r\(value.rawValue), flags \(flags)"
         case .defineStaticField(let classObject, let name, let value, let flags):
             return "defineStaticField r\(classObject.rawValue), cp[\(name.rawValue)], r\(value.rawValue), flags \(flags)"
-        case .asyncEnter:
-            return "asyncEnter"
-        case .await(let dst, let value, let resumePoint):
-            return "await r\(dst.rawValue), r\(value.rawValue), resumePoint \(resumePoint)"
-        case .asyncReturn(let value):
-            return "asyncReturn r\(value.rawValue)"
-        case .asyncThrow(let value):
-            return "asyncThrow r\(value.rawValue)"
+        case .createPromise(let dst):
+            return "createPromise r\(dst.rawValue)"
+        case .fulfillPromise(let promise, let value):
+            return "fulfillPromise r\(promise.rawValue), r\(value.rawValue)"
+        case .rejectPromise(let promise, let reason):
+            return "rejectPromise r\(promise.rawValue), r\(reason.rawValue)"
+        case .promiseResolve(let dst, let value):
+            return "promiseResolve r\(dst.rawValue), r\(value.rawValue)"
+        case .promiseThen(let dst, let promise, let onFulfilled, let onRejected):
+            if let onRejected = onRejected {
+                return "promiseThen r\(dst.rawValue), r\(promise.rawValue), onFulfilled r\(onFulfilled.rawValue), onRejected r\(onRejected.rawValue)"
+            } else {
+                return "promiseThen r\(dst.rawValue), r\(promise.rawValue), onFulfilled r\(onFulfilled.rawValue), onRejected nil"
+            }
+        case .enqueueMicrotask(let job):
+            return "enqueueMicrotask r\(job.rawValue)"
+        case .asyncEnter(let promise):
+            return "asyncEnter r\(promise.rawValue)"
+        case .awaitSuspend(let value, let promise, let resumePoint):
+            return "awaitSuspend r\(value.rawValue), promise r\(promise.rawValue), resumePoint \(resumePoint)"
+        case .asyncResumePoint(let id):
+            return "asyncResumePoint \(id)"
+        case .createGeneratorObject(let dst, let function):
+            return "createGeneratorObject r\(dst.rawValue), f[\(function.rawValue)]"
+        case .createAsyncGeneratorObject(let dst, let function):
+            return "createAsyncGeneratorObject r\(dst.rawValue), f[\(function.rawValue)]"
         case .generatorEnter:
             return "generatorEnter"
-        case .yield(let dst, let value, let resumePoint):
-            return "yield r\(dst.rawValue), r\(value.rawValue), resumePoint \(resumePoint)"
+        case .getResumeValue(let dst):
+            return "getResumeValue r\(dst.rawValue)"
+        case .getResumeKind(let dst):
+            return "getResumeKind r\(dst.rawValue)"
+        case .jumpIfResumeKind(let kind, let offset):
+            return "jumpIfResumeKind \(kind), \(offset.rawValue)"
+        case .generatorSuspend(let dst, let value, let resumePoint):
+            return "generatorSuspend r\(dst.rawValue), r\(value.rawValue), resumePoint \(resumePoint)"
+        case .asyncGeneratorSuspend(let dst, let value, let resumePoint):
+            return "asyncGeneratorSuspend r\(dst.rawValue), r\(value.rawValue), resumePoint \(resumePoint)"
         case .yieldStar(let dst, let iterator, let resumePoint):
             return "yieldStar r\(dst.rawValue), r\(iterator.rawValue), resumePoint \(resumePoint)"
         case .generatorReturn(let value):
             return "generatorReturn r\(value.rawValue)"
         case .generatorThrow(let value):
             return "generatorThrow r\(value.rawValue)"
+        case .asyncGeneratorReturn(let value):
+            return "asyncGeneratorReturn r\(value.rawValue)"
+        case .asyncGeneratorThrow(let value):
+            return "asyncGeneratorThrow r\(value.rawValue)"
         case .resumePoint(let id):
             return "resumePoint \(id)"
         case .profileValue(let reg, let slot):

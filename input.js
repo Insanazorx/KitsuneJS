@@ -1,4 +1,19 @@
-let c = 3 + 5 * 2;
+let c = 31 + 31
+
+function foo() {
+    if (c > 50) {
+        c = c - 10;
+    } else {
+        print("c is less than or equal to 50");
+    }
+    
+}
+
+
+
+
+
+
 
 /*
 var global1 = 10

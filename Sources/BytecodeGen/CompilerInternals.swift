@@ -1,10 +1,11 @@
 extension BytecodeCompiler {
     
     enum RefType {
-        case lexical(UInt16)
+        case local(UInt16)
         case context(UInt8, UInt16)
-        case global(Bytecode.CPIndex)
-        case todo
+        case globalVar(UInt16)
+        case globalLexical(UInt16)
+        case unresolved(Bytecode.CPIndex)
     }
 
     enum AssignmentTargetInfo {
@@ -13,6 +14,13 @@ extension BytecodeCompiler {
         case computedMember(Bytecode.Reg, Bytecode.Reg)
         case destructuring
         case todo
+    }
+
+    enum DestructionPlan {
+        case single(AssignmentTargetInfo)
+        case array([DestructionPlan])
+        case object([Bytecode.CPIndex: DestructionPlan])
+        case todo        
     }
 
     enum PatternBindingPlan {
@@ -34,13 +42,13 @@ extension BytecodeCompiler {
     }
 
     struct VariableDeclInfo {
-        var reg: Bytecode.Reg
+        var reg: Bytecode.Reg?
         var slot: UInt16
         var isGlobal: Bool
     }
 
     enum ExprResult {
-        case assignment(AssignmentTargetInfo)
+        case assignment
         case expr(Bytecode.Reg)
         
         case todo

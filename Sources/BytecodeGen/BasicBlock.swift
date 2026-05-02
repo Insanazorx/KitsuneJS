@@ -1,9 +1,32 @@
 enum Terminator {
     case jump(BlockID: Int)
     case conditionalJump(condition: Bytecode, trueBlockId: Int, falseBlockId: Int)
-    case `return`
+    case `return`(Bytecode.Reg?)
     case `throw`
+    case halt
 }
+
+extension Terminator: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .jump(let blockId):
+            return "jump #bb[\(blockId)]"
+        case .conditionalJump(let condition, let trueBlockId, let falseBlockId):
+            return "jumpIf #c{\(condition)} #bbtrue[\(trueBlockId)] #bbfalse[\(falseBlockId)]"
+        case .return(let reg):
+            if let reg = reg {
+                return "return \(reg)"
+            } else {
+                return "return"
+            }
+        case .throw:
+            return "throw"
+        case .halt:
+            return "halt"
+        }
+    }
+}
+
 
 final class BasicBlock {
     let id: Int

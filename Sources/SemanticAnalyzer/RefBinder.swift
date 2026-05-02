@@ -198,11 +198,12 @@ extension RefBinder: NodeWalker {
     }
 
     public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
+        enterContext(kind: .Write)
         return true
     }
 
     public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
-    
+        exitContext()
     }
 
 

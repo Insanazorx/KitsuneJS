@@ -1,4 +1,3 @@
-
 public class CompilationUnit {
 
     public let ast: ASTNode
@@ -37,16 +36,18 @@ extension CompilationUnit {
     }
 
     func getBoundRefByNodeId(nodeId: Int) -> BoundRef {
-        
-        let scopeId = nodeIdToScopeId[nodeId] 
-        
+        let scopeId = nodeIdToScopeId[nodeId]
         let scope = scopes[scopeId]
-        
-        if let refId = scope.boundRefs.first(where: { boundRefs[$0].refNodeId == nodeId }) {
-            return boundRefs[refId]
+
+        guard scope.boundRefs.contains(nodeId) else {
+            fatalError("There must have been a bound reference for this nodeId, but none was found in its scope. NodeId: \(nodeId), ScopeId: \(scopeId)")
         }
-        
-        fatalError("There must have been a bound reference for this nodeId, but none was found. NodeId: \(nodeId), ScopeId: \(scopeId)")
+
+        if let boundRef = boundRefs.first(where: { $0.refNodeId == nodeId }) {
+            return boundRef
+        }
+
+        fatalError("Scope contains this bound reference nodeId, but the BoundRef table does not. NodeId: \(nodeId), ScopeId: \(scopeId)")
     }
 
     public func findScopeById(_ id: Int) -> Scope? {

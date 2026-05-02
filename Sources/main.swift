@@ -32,7 +32,7 @@ func main() {
       
       print ("-----------------------------------")
 
-      var compiler = BytecodeCompiler(compilationUnit: scopeAnalyzer.compilationUnit)
+      let compiler = BytecodeCompiler(compilationUnit: scopeAnalyzer.compilationUnit)
       compiler.compile()
       compiler.printCompilationResult()
       
