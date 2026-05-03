@@ -22,6 +22,8 @@ class BytecodeCompiler {
     var ICSlotCounter: UInt16 = 0
     var ProfileSlotCounter: UInt16 = 0
 
+    var universalUndefinedReg: Bytecode.Reg? = nil // a register that holds the "undefined" value, to be reused whenever we need to load "undefined", to save bytecode space
+
     init(compilationUnit: CompilationUnit) {
         self.compilationUnit = compilationUnit
         self.currentBlock = BasicBlock(id: 0)
@@ -31,6 +33,11 @@ class BytecodeCompiler {
 
 extension BytecodeCompiler {
 
+    func putDebugMark(_ comment: String) {
+        #if DEBUG
+        //emit(.debugMark(id: UInt32(currentNodeId), comment: comment))
+        #endif
+    }
     
     func putRecordOnConstantsPool(_ value: String) -> (UInt32, Bool) {
         if let existingIndex = constantsPool[value] {
@@ -65,18 +72,17 @@ extension BytecodeCompiler {
 
     func enterFunctionBBContext(funcId: Bytecode.FunctionID) -> BasicBlock {
         let newBlock = allocBasicBlock()
-        let oldBlock = currentBlock
-
+        
         pushVirtualCallStack(funcId)
         functionTable[funcId] = [newBlock]
 
-        switchBasicBlock(newBlock)
-        return oldBlock
+        return switchBasicBlock(newBlock)
+         
     }
 
     func exitFunctionBBContext(oldBlock: BasicBlock) {
         popVirtualCallStack()
-        switchBasicBlock(oldBlock)
+        _ = switchBasicBlock(oldBlock)
     }
 
     func allocNodeId() -> Int {
@@ -92,6 +98,27 @@ extension BytecodeCompiler {
 
     func emit(_ bytecode: Bytecode) {
         currentBlock.instructions.append(bytecode)
+    }
+
+    func emitOnTopLevel(_ bytecode: Bytecode, at index: Int = 2) {
+        if currentBlock.instructions.count < index {
+            while currentBlock.instructions.count < index{
+                currentBlock.instructions.insert(.nop, at: 0)
+            }
+        } 
+        currentBlock.instructions.insert(bytecode, at: index) // after the initial .enterGlobal
+    }
+
+    func emitOnFunctionLevel(_ bytecode: Bytecode, funcId: Bytecode.FunctionID, at index: Int = 1) {
+        guard let blocks = functionTable[funcId] else {
+            fatalError("Function ID should have been put in the function table")
+        }
+
+        guard let firstBlock = blocks.first else {
+            fatalError("There should be at least one block for the function")
+        }
+
+        firstBlock.instructions.insert(bytecode, at: index)
     }
 
     func emitTerminator(_ terminator: Terminator) {
@@ -150,9 +177,22 @@ extension BytecodeCompiler {
         return slot
     }
 
+    func universalCompilerUndefinedReg() -> Bytecode.Reg {
+        if let reg = universalUndefinedReg {
+            return reg
+        } else {
+            let reg = allocRegister()
+            emit(.loadUndefined(dst: reg))
+            universalUndefinedReg = reg
+            return reg
+        }
+    }
+
     func returnSomeRegWithUndefined()-> Bytecode.Reg {
         let reg = allocRegister()
-        emit(.loadUndefined(dst: reg))
+        let bytecode: Bytecode = .loadUndefined(dst: reg)
+        emit(bytecode)
+        
         return reg
     }
 }
@@ -174,6 +214,7 @@ extension BytecodeCompiler {
         _ = allocNodeId()
 
             emit(.enterGlobal)
+            _ = universalCompilerUndefinedReg()
 
             if case .program(let body) = program {
                 for statement in body {
@@ -277,24 +318,173 @@ extension BytecodeCompiler {
 
         _ = switchBasicBlock(afterIfBlock)
 
-
-
-
-
-
-
-        
-        
     }
+
     func compileWhileStatement(currentNodeId: Int, _ test: Expression, _ body: Statement) {
         
+        let testBlock = allocBasicBlock()
+        let bodyBlock = allocBasicBlock()
+        let afterLoopBlock = allocBasicBlock()
+        
+        for block in [testBlock, bodyBlock, afterLoopBlock] {
+            putBBOnRelevantContext(entryBlock: block)
+        }    
+
+        emitTerminator(.jump(BlockID: testBlock.id))
+
+        _ = switchBasicBlock(testBlock)
+
+        do {
+            
+            let testResult = walkExpression(test)
+            guard case .expr(let testReg) = testResult else {
+                fatalError("Unsupported expression result for while statement test")
+            }
+
+            let testAsBoolReg = allocRegister()
+            emit(.toBoolean(dst: testAsBoolReg, src: testReg, profile: allocProfileSlot()))
+
+            emitTerminator(.conditionalJump(
+                condition: .jumpIfTrue(
+                    condition: testAsBoolReg,
+                    offset: Bytecode.JumpOffset(rawValue: .backpatchRef(bodyBlock.id))),
+                trueBlockId: bodyBlock.id,
+                falseBlockId: afterLoopBlock.id
+            ))
+
+        }
+
+        _ = switchBasicBlock(bodyBlock)
+
+        do {
+            walkStatement(body)
+            emitTerminator(.jump(BlockID:testBlock.id))
+        }
+
+        _ = switchBasicBlock(afterLoopBlock)
+
+
+
+
     }
     func compileDoWhileStatement(currentNodeId: Int, _ body: Statement, _ test: Expression) {
-    
+        let bodyBlock = allocBasicBlock()
+        let testBlock = allocBasicBlock()
+        let afterLoopBlock = allocBasicBlock()
+        
+        for block in [bodyBlock, testBlock, afterLoopBlock] {
+            putBBOnRelevantContext(entryBlock: block)
+        }    
+
+        emitTerminator(.jump(BlockID: bodyBlock.id))
+
+        _ = switchBasicBlock(bodyBlock)
+
+        do {
+            walkStatement(body)
+            emitTerminator(.jump(BlockID: testBlock.id))
+        }
+
+        _ = switchBasicBlock(testBlock)
+
+        do {
+            
+            let testResult = walkExpression(test)
+            guard case .expr(let testReg) = testResult else {
+                fatalError("Unsupported expression result for do-while statement test")
+            }
+
+            let testAsBoolReg = allocRegister()
+            emit(.toBoolean(dst: testAsBoolReg, src: testReg, profile: allocProfileSlot()))
+
+            emitTerminator(.conditionalJump(
+                condition: .jumpIfTrue(
+                    condition: testAsBoolReg,
+                    offset: Bytecode.JumpOffset(rawValue: .backpatchRef(bodyBlock.id))
+                ),
+                trueBlockId: bodyBlock.id,
+                falseBlockId: afterLoopBlock.id
+            ))
+
+        }
+
+        _ = switchBasicBlock(afterLoopBlock)
     }
 
     func compileForStatement(currentNodeId: Int, _ initial: ForInit?, _ test: Expression?, _ update: Expression?, _ body: Statement) {
         
+        let initReg, testReg, updateReg: Bytecode.Reg? 
+        
+        if let initial = initial {
+
+            switch initial {
+                case .declaration(let decl):
+                    walkDeclaration(decl)
+                case .expression(let expr):
+                    guard case .expr(let reg) = walkExpression(expr) else {
+                        fatalError("Unsupported expression result for for statement initial")
+                    }
+                    initReg = reg
+            }
+        }
+
+        let testBlock = allocBasicBlock()
+        let bodyBlock = allocBasicBlock()
+        let updateBlock = allocBasicBlock()
+        let afterLoopBlock = allocBasicBlock()
+
+        for block in [testBlock, bodyBlock, updateBlock, afterLoopBlock] {
+            putBBOnRelevantContext(entryBlock: block)
+        }
+
+        emitTerminator(.jump(BlockID: testBlock.id))
+
+        _ = switchBasicBlock(testBlock)
+
+        do {
+            if let test = test {
+                let testResult = walkExpression(test)
+                guard case .expr(let testReg) = testResult else {
+                    fatalError("Unsupported expression result for for statement test")
+                }
+
+                let testAsBoolReg = allocRegister()
+                emit(.toBoolean(dst: testAsBoolReg, src: testReg, profile: allocProfileSlot()))
+
+                emitTerminator(.conditionalJump(
+                    condition: .jumpIfTrue(
+                        condition: testAsBoolReg,
+                        offset: Bytecode.JumpOffset(rawValue: .backpatchRef(bodyBlock.id))
+                    ),
+                    trueBlockId: bodyBlock.id,
+                    falseBlockId: afterLoopBlock.id
+                ))
+            } else {
+                emitTerminator(.jump(BlockID: updateBlock.id))
+            }
+        }
+
+        _ = switchBasicBlock(updateBlock)
+
+        do {
+            if let update = update {
+                _ = walkExpression(update)
+                emitTerminator(.jump(BlockID: bodyBlock.id))
+            } else {
+                emitTerminator(.jump(BlockID: bodyBlock.id))
+            }
+        }
+
+        _ = switchBasicBlock(bodyBlock)
+
+        do {
+            walkStatement(body)
+            emitTerminator(.jump(BlockID: testBlock.id))
+        }
+
+        _ = switchBasicBlock(afterLoopBlock)
+
+
     }
 
     func compileForInStatement(currentNodeId: Int, _ left: ForEachLeft, _ right: Expression, _ body: Statement) {
@@ -311,6 +501,19 @@ extension BytecodeCompiler {
 
     func compileReturnStatement(currentNodeId: Int, _ argument: Expression?) {
         
+        if let argument = argument {
+            let returnValueResult = walkExpression(argument)
+            guard case .expr(let returnValueReg) = returnValueResult else {
+                fatalError("Unsupported expression result for return statement argument")
+            }
+
+            emitTerminator(.return(returnValueReg))
+        } else {
+            let undefinedReg = universalCompilerUndefinedReg()
+            emitTerminator(.return(undefinedReg))
+        }
+
+        putBBOnRelevantContext(entryBlock: allocBasicBlock())
         
     }
 
@@ -335,7 +538,7 @@ extension BytecodeCompiler {
         
     }
     //MARK: Expressions
-    func walkExpression(_ expr: Expression) -> ExprResult {
+    func walkExpression(_ expr: Expression, isPropertyKey: Bool = false) -> ExprResult {
         let id = allocNodeId()
         switch expr {
             case .privateIdentifier:
@@ -365,14 +568,14 @@ extension BytecodeCompiler {
             case .functionExpression:
                 fallthrough
             case .classExpression:
-                return compileNudExpression(currentNodeId: id, expr)
+                return compileNudExpression(currentNodeId: id, expr, isPropertyKey: isPropertyKey)
 
             case .binary(let left, let op, let right):
                 return compileBinaryExpression(currentNodeId: id, left, op, right)
-            case .assignment(let target, let op, let value):
+            case .assignment(let target, let op, let value): //DONE~
                 return compileAssignmentExpression(currentNodeId: id, target, op, value)
-            case .call(let callee, let arguments):
-                return compileCallExpression(currentNodeId: id, callee, arguments)
+            case .call(let callee, let arguments):  //DONE
+                return compileCallExpression(currentNodeId: id, callee, arguments) 
             case .member(let object, let property):
                 return compileMemberExpression(currentNodeId: id, object, property)
             case .computedMember(let object, let propertyExpr):
@@ -388,21 +591,19 @@ extension BytecodeCompiler {
     func compileBinaryExpression(currentNodeId: Int,_ left: Expression, _ op: TokenType, _ right: Expression) -> ExprResult {
         
         let leftResult = walkExpression(left)
-        let rightResult = walkExpression(right)
+        guard case .expr(let leftReg) = leftResult else {
+            fatalError("Unsupported expression result for binary expression left operand")
+        }
         
-        let leftReg: Bytecode.Reg
-        let rightReg: Bytecode.Reg
+        let rightResult = walkExpression(right)
+        guard case .expr(let rightReg) = rightResult else {
+            fatalError("Unsupported expression result for binary expression right operand")
+        }
         
         let resultReg = allocRegister()
         let ProfileSlot = allocProfileSlot()
 
-        switch (leftResult, rightResult) {
-            case (.expr(let lReg), .expr(let rReg)):
-                leftReg = lReg
-                rightReg = rReg
-            default:
-                fatalError("Unsupported expression result for binary expression")
-        }
+       
 
         switch op {
             case .binaryOp(.plus):
@@ -457,35 +658,61 @@ extension BytecodeCompiler {
         return .expr(resultReg)
     }
     func compileMemberExpression(currentNodeId: Int, _ object: Expression, _ property: Expression) -> ExprResult {
-        return .todo
+        let objectResult = walkExpression(object)
+        guard case .expr(let objectReg) = objectResult else {
+            fatalError("Unsupported expression result for member expression object")
+        }
+
+        let propertyResult = walkExpression(property, isPropertyKey: true)
+        guard case .propertyKey(let propertyName) = propertyResult else {
+            fatalError("Unsupported expression result for member expression property")
+        }
+
+        let resultReg = allocRegister()
+
+        emit(.getById(dst: resultReg, base: objectReg, name: propertyName, cache: allocICSlot() ))
+        return .expr(resultReg)
     }
     func compileComputedMemberExpression(currentNodeId: Int, _ object: Expression, _ propertyExpr: Expression) -> ExprResult {
-        return .todo
+        let objectResult = walkExpression(object)
+        guard case .expr(let objectReg) = objectResult else {
+            fatalError("Unsupported expression result for computed member expression object")
+        }
+
+        let propertyResult = walkExpression(propertyExpr)
+        guard case .expr(let propertyReg) = propertyResult else {
+            fatalError("Unsupported expression result for computed member expression property")
+        }
+
+        let propertyKeyReg = allocRegister()
+        emit(.toPropertyKey(dst: propertyKeyReg, src: propertyReg, profile: allocProfileSlot()))
+
+        let resultReg = allocRegister()
+        emit(.getByVal(dst: resultReg, base: objectReg, key: propertyKeyReg, cache: allocICSlot() ))
+        
+        return .expr(resultReg)
     }
+
     func compileSequenceExpression(currentNodeId: Int, _ exprs: [Expression]) -> ExprResult {
         return .todo
     }
     func compileCallExpression(currentNodeId: Int, _ callee: Expression, _ arguments: [Expression]) -> ExprResult {
+        putDebugMark("Entered Call Expression")
+        
         let calleeResult = walkExpression(callee)
-        let calleeReg: Bytecode.Reg
+        guard case .expr(let calleeReg) = calleeResult else {
+            fatalError("Unsupported expression result for call expression callee")
+        }   
 
-        switch calleeResult {
-            case .expr(let reg):
-                calleeReg = reg
-            default:
-                fatalError("Unsupported expression result for call expression callee")
-        }
         let argc = Bytecode.ArgCount(rawValue: UInt16(arguments.count))
 
         var argumentRegs: [Bytecode.Reg] = []
         for argument in arguments {
             let argResult = walkExpression(argument)
-            switch argResult {
-                case .expr(let reg):
-                    argumentRegs.append(reg)
-                default:
-                    fatalError("Unsupported expression result for call expression argument")
+            guard case .expr(let argReg) = argResult else {
+                fatalError("Unsupported expression result for call expression argument")
             }
+            argumentRegs.append(argReg)
         }
 
         var argsBaseReg: Bytecode.Reg? = nil
@@ -499,6 +726,7 @@ extension BytecodeCompiler {
                 }
 
                 emit(.move(dst: argsBaseReg, src: argumentRegs[i]))
+                continue
             }
 
             let dstReg = allocRegister()
@@ -521,11 +749,11 @@ extension BytecodeCompiler {
         
         return .expr(resultReg)
     }
-    func compileNudExpression(currentNodeId: Int, _ expr: Expression) -> ExprResult {
-        
+    func compileNudExpression(currentNodeId: Int, _ expr: Expression, isPropertyKey: Bool = false) -> ExprResult {
+        putDebugMark("Entered Nud Expression")
         switch expr {
             case .identifier(let name):
-                return compileIdentifierExpression(currentNodeId: currentNodeId, name)
+                return compileIdentifierExpression(currentNodeId: currentNodeId, name, isPropertyKey: isPropertyKey)
                     
             case .literal(let literal):
                 return compileLiteralExpression(currentNodeId: currentNodeId, literal)
@@ -535,9 +763,13 @@ extension BytecodeCompiler {
     
     }
 
-    func compileIdentifierExpression(currentNodeId: Int, _ name: String) -> ExprResult {
-        
+    func compileIdentifierExpression(currentNodeId: Int, _ name: String, isPropertyKey: Bool = false) -> ExprResult {
+        putDebugMark("Entered Identifier Expression")
         let (cpIndex, isPresentAtPool) = putRecordOnConstantsPool(name)
+
+        if isPropertyKey {
+            return .propertyKey(Bytecode.CPIndex(rawValue: cpIndex))
+        }
         
         let resultReg: Bytecode.Reg = allocRegister()
         let profileSlot = allocProfileSlot()
@@ -561,7 +793,7 @@ extension BytecodeCompiler {
             fatalError("No binding slot found for captured identifier")
         }
             
-        if boundRef.isCaptured && boundRef.bindingId != nil {
+        if boundRef.capturingDepth != 0 && boundRef.bindingId != nil {
             
             emit(.getContext(
                 dst: resultReg, 
@@ -607,8 +839,8 @@ extension BytecodeCompiler {
     }
 
     func compileLiteralExpression(currentNodeId: Int, _ literal: Literal) -> ExprResult {
+        putDebugMark("Entered Literal Expression")
         let resultReg: Bytecode.Reg = allocRegister()
-        putRecordOnConstantsPool(String(describing: literal))
         
         switch literal {
             case .null:
@@ -634,16 +866,21 @@ extension BytecodeCompiler {
     }
 
     func compileAssignmentExpression(currentNodeId: Int, _ target: AssignmentTarget, _ op: TokenType, _ value: Expression) -> ExprResult{
+        putDebugMark("Entered Assignment Expression")
         let targetInfo = walkAssignmentTarget(target)
         let valueResult = walkExpression(value)
+        
+        guard case .expr(let valueReg) = valueResult else {
+            fatalError("Unsupported expression result for assignment expression value")
+        }
 
         switch op { // for the varying assignment operators (+=, *=, etc.)
         case .binaryOp(.assign):
-            switch (targetInfo, valueResult) { //main logic of simple assignment
-            case (.destructuring, .expr):
+            switch targetInfo { //main logic of simple assignment
+            case .destructuring:
                 fatalError("Destructuring assignment not implemented yet")
 
-            case (.identifier(let refType), .expr(let valueReg)):
+            case .identifier(let refType):
                 switch refType {
                     case .local(let slot):
                         emit(.putLocal(slot: Bytecode.LocalSlot(rawValue: UInt16(slot)), src: valueReg))
@@ -656,22 +893,29 @@ extension BytecodeCompiler {
                     case .unresolved(let cpIndex):
                         emit(.putGlobalProperty( name: cpIndex, src: valueReg, cache: allocICSlot()))
                 }
-            case (.namedMember(let objectReg, let propertyName), .expr(let valueReg)):
+            case .namedMember(let objectReg, let propertyName):
                 // if that propertyName is not defined yet, a new property will be created on the object
-                emit(.defineOwnById(
+                emit(.putById(
                     base: objectReg,
                     name: propertyName, 
                     value: valueReg, 
-                    flags: Bytecode.PropertyFlags(rawValue: 0) //MARK: TODO: dummy for now
+                    cache: allocICSlot()
                 ))
 
-            case (.computedMember(let objectReg, let propertyNameReg), .expr(let valueReg)):
+            case .computedMember(let objectReg, let propertyReg):
                 
-                emit(.defineOwnByVal(
+                let propertyKeyReg = allocRegister()
+                emit(.toPropertyKey(
+                    dst: propertyKeyReg, 
+                    src: propertyReg, 
+                    profile: allocProfileSlot()
+                ))
+
+                emit(.putByVal(
                     base: objectReg,
-                    key: propertyNameReg, 
+                    key: propertyKeyReg, 
                     value: valueReg, 
-                    flags: Bytecode.PropertyFlags(rawValue: 0) //MARK: TODO: dummy for now
+                    cache: allocICSlot()
                 ))
 
             default: 
@@ -707,7 +951,8 @@ extension BytecodeCompiler {
 
     
     func compileIdentifierAssignmentTarget(currentNodeId: Int, _ name: String) -> AssignmentTargetInfo {
-        
+        putDebugMark("Entered Identifier Assignment Target")
+
         let boundRef = compilationUnit.getBoundRefByNodeId(nodeId: currentNodeId)
         guard boundRef.kind == .Write else {
             fatalError("Identifier assignment target must be a write reference")
@@ -738,7 +983,7 @@ extension BytecodeCompiler {
             } else {
                 return .identifier(.globalVar(UInt16(slot)))
             }
-        } else if boundRef.isCaptured {
+        } else if boundRef.capturingDepth != 0 {
             return .identifier(.context(UInt8(boundRef.capturingDepth), UInt16(slot)))
         } else {
             return .identifier(.local(UInt16(slot)))
@@ -746,15 +991,42 @@ extension BytecodeCompiler {
     }
 
     func compileMemberAssignmentTarget(currentNodeId: Int, _ object: Expression, _ property: Expression) -> AssignmentTargetInfo {
+        putDebugMark("Entered Member Assignment Target")
         
+        let objectResult = walkExpression(object)
         
-        return .todo
+        guard case .expr(let objectReg) = objectResult else {
+            fatalError("Unsupported expression result for member assignment target object")
+        }
+
+        let propertyResult = walkExpression(property, isPropertyKey: true)
+        
+        guard case .propertyKey(let propertyName) = propertyResult else {
+            fatalError("Unsupported expression result for member assignment target property")
+        }
+
+        return .namedMember(objectReg, propertyName)
     }
     func compileComputedMemberAssignmentTarget(currentNodeId: Int, _ object: Expression, _ propertyExpr: Expression) -> AssignmentTargetInfo {
-       return .todo
+        putDebugMark("Entered Computed Member Assignment Target")
+
+        let objectResult = walkExpression(object)
+        guard case .expr(let objectReg) = objectResult else {
+            fatalError("Unsupported expression result for computed member assignment target object")
+        }
+        
+        let propertyResult = walkExpression(propertyExpr)
+        guard case .expr(let propertyReg) = propertyResult else {
+            fatalError("Unsupported expression result for computed member assignment target property") 
+        }
+
+        return .computedMember(objectReg, propertyReg)
+
+
     }
 
     func compileDestructuringAssignmentTarget(currentNodeId: Int, _ DestructuringPattern: DestructuringPattern) -> AssignmentTargetInfo {
+        putDebugMark("Entered Destructuring Assignment Target")
         return .destructuring
     }
 
@@ -779,60 +1051,84 @@ extension BytecodeCompiler {
     }
 
     func compileFunctionDeclaration(currentNodeId: Int, _ name: String, _ params: [Pattern]?, _ body: Statement, _ isAsync: Bool, _ isGenerator: Bool) {
+        putDebugMark("Entered Function Declaration")
         if isAsync || isGenerator {
             fatalError("Async and generator functions not supported yet")
         }
         
-        let (cpIndex, isPresentAlready) = putRecordOnConstantsPool(name)
+        let (cpIndex, _) = putRecordOnConstantsPool(name)
         
-        guard !isPresentAlready else {
-            //MARK:- TODO: throw an error here since function declarations must have unique names
-            fatalError("Function name already exists in constants pool, which should not happen since function declarations must have unique names. Name: \(name), CP Index: \(cpIndex)")
-        }
 
         let funcId = allocFunctionId()
         let funcReg = allocRegister()
         
-        emit(.createFunction(
-            dst: funcReg, 
-            function: funcId
-        ))
+        let envReg = allocRegister()
+        let scopeLayout = allocScopeLayout()
+
+        emitOnTopLevel(.createLexicalEnvironment(dst: envReg, layout: scopeLayout))
+        
+        let functionBinding = compilationUnit.getBindingByNodeId(nodeId: currentNodeId)
+
+        guard let slot = functionBinding.slot else {
+            fatalError("No binding slot found for function declaration")
+        }
+
+        if VirtualCallStack.isEmpty {
+
+            emitOnTopLevel(.createFunction(
+                dst: funcReg, 
+                function: funcId
+            ), at: 2) // after the initial .enterGlobal and .createLexicalEnvironment for the global scope
+
+            emitOnTopLevel(.initGlobalVar(
+                slot: Bytecode.GlobalSlot(rawValue: UInt16(slot)),
+                src: funcReg
+            ), at: 3) // after the .createFunction
+        
+        } else {
+            
+            emitOnTopLevel(.createClosure(
+                dst: funcReg,
+                function: funcId, 
+                environment: envReg
+            ), at: 2) // same as above
+
+            emitOnTopLevel(.initLocal(
+                slot: Bytecode.LocalSlot(rawValue: UInt16(slot)),
+                src: funcReg
+            ), at: 3) // same as above
+        }
                 
         let paramInfos: [BytecodeCompiler.PatternBindingPlan] = if let parameters = params {
             parameters.map { walkPattern($0) }
         } else {
             []
         }
-
+        
+        let oldBlock = enterFunctionBBContext(funcId: funcId)
+        
+        emit(.enterFunction)
+        emit(.pushLexicalEnvironment(environment: envReg))
+        
         if !paramInfos.isEmpty {
             paramInfos.forEach {
                 
                 let declInfos: [BytecodeCompiler.VariableDeclInfo] = applyPatternPlan(patternPlan: $0, exprResult: nil)
-                let undefinedReg = returnSomeRegWithUndefined()
+                let reg = allocRegister()
                 for declInfo in declInfos {
                     emit(.getArgument(
-                        dst: declInfo.reg ?? undefinedReg,
+                        dst: declInfo.reg ?? reg,
                         slot: allocArgumentSlot()
                     ))
 
                     emit(.initLocal(
                         slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
-                        src: declInfo.reg ?? undefinedReg
+                        src: declInfo.reg ?? reg
                     ))
                 }
             }
         }
 
-        let oldBlock = enterFunctionBBContext(funcId: funcId)
-       
-        emit(.enterFunction)
-
-        let envReg = allocRegister()
-        let scopeLayout = allocScopeLayout()
-        
-        emit(.createLexicalEnvironment(dst: envReg, layout: scopeLayout))
-        emit(.pushLexicalEnvironment(environment: envReg))
-        
         do {
             walkStatement(body)
         }
@@ -847,10 +1143,12 @@ extension BytecodeCompiler {
 
 
     func compileClassDeclaration(currentNodeId: Int, _ name: String, _ superClass: Expression?, _ body: [ClassElement]) {
+        putDebugMark("Entered Class Declaration")
     
     }
 
     func compileVariableDeclaration(currentNodeId: Int, _ decls: [VariableDeclarator]) {
+        putDebugMark("Entered Variable Declaration")
         let varDeclKind: VarDeclKind = .var
         decls.forEach { decl in
             walkVariableDeclarator(declKind: varDeclKind, decl.id, decl.init_)
@@ -860,6 +1158,7 @@ extension BytecodeCompiler {
     }
     
     func compileLexicalDeclaration(currentNodeId: Int, _ kind: LexicalKind, _ decls: [VariableDeclarator]) {
+        putDebugMark("Entered Lexical Declaration")
 
         let varDeclKind: VarDeclKind = {
             switch kind {
@@ -877,7 +1176,8 @@ extension BytecodeCompiler {
     }
 
     func walkVariableDeclarator(declKind: VarDeclKind, _ pat: Pattern, _ initializer: Expression?)  {   
-        let currentNodeId = allocNodeId()
+        putDebugMark("Entered Variable Declarator Walker")
+        let currentNodeId = allocNodeId()   
 
         var varDeclInfos: [VariableDeclInfo]? = nil
 
@@ -887,39 +1187,44 @@ extension BytecodeCompiler {
             let initResult = walkExpression(initializer)
             varDeclInfos = applyPatternPlan(patternPlan: patternPlan, exprResult: initResult)
         }
-        let undefinedReg = returnSomeRegWithUndefined() 
-
+        
         if let declInfos = varDeclInfos {
-            
             
             
             declInfos.forEach { declInfo in
               
                 if !(declInfo.isGlobal) {
+                    
+                    if case .var = declKind {
+                        emitOnTopLevel(.initLocal(
+                            slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
+                            src: declInfo.reg ?? universalCompilerUndefinedReg()
+                        ))
 
-                    emit(.initLocal(
-                        slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
-                        src: declInfo.reg ?? undefinedReg
-                    ))
-
+                        
+                    } else {
+                        emit(.initLocal(
+                            slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
+                            src: declInfo.reg ?? universalCompilerUndefinedReg()
+                        ))
+                    }
                     
                 } else {
 
                     switch declKind {
                         case .var:
-                            emit(.initGlobalVar(
+                            emitOnTopLevel(.initGlobalVar(
                                 slot: Bytecode.GlobalSlot(rawValue: declInfo.slot),
-                                src: declInfo.reg ?? undefinedReg
+                                src: declInfo.reg ?? universalCompilerUndefinedReg()
                             ))
 
                         case .let, .const:
                             emit(.initGlobalLexical(
                                 slot: Bytecode.GlobalSlot(rawValue: declInfo.slot),
-                                src: declInfo.reg ?? undefinedReg
+                                src: declInfo.reg ?? universalCompilerUndefinedReg()
                             ))
-                        }
+                    }
                 }
-            
             }
         }
 
@@ -1040,29 +1345,33 @@ extension BytecodeCompiler {
     }
 }
 
-extension BytecodeCompiler {
-    func printCompilationResult() {
-        
-        print("=== Bytecode ===")
+extension BytecodeCompiler: CustomStringConvertible {
+    
+    var description: String {
+        var result = ""
+        result += "=O================BYTECODE DUMP=================O=\n"
+        result += "=== Global Basic Block ===\n"
         for block in GlobalBasicBlocks {
-            print(block)
+            result += "\(block)\n"
         }
         
-        print("=== Function Table ===")
+        result += "=== Function Table ===\n"
         for (funcId, blocks) in functionTable {
-            print("Function ID: \(funcId)")
+            result += "Function ID: \(funcId)\n"
             for block in blocks {
-                print(block)
+                result += "\(block)\n"
             }
         }
 
         
-        print("=== Constants Pool ===")
+        result += "=== Constants Pool ===\n"
         
         constantsPool.forEach { (value, index) in
-            print("Index: \(index), Value: \(value)")
+            result += "Index: \(index), Value: \(value)\n"
         }
         
+        return result
     }
+    
 }
     

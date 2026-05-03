@@ -133,6 +133,7 @@ public enum Bytecode: Equatable, Hashable {
     case nop
     case coverageMark(UInt32)
     case debugTrap(UInt16)
+    case debugMark(id: UInt32, comment: String)
     case debugLog(Reg)
     case debugDumpScope
     case debugDumpIC(ICSlot)
@@ -617,6 +618,8 @@ extension Bytecode: CustomStringConvertible {
             return "coverageMark \(id)"
         case .debugTrap(let id):
             return "debugTrap \(id)"
+        case .debugMark(let id, let comment):
+            return "debugMark \(id) \"\(comment)\""
         case .debugLog(let reg):
             return "debugLog r\(reg.rawValue)"
         case .debugDumpScope:

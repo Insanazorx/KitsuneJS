@@ -49,6 +49,7 @@ extension BytecodeCompiler {
 
     enum ExprResult {
         case assignment
+        case propertyKey(Bytecode.CPIndex)
         case expr(Bytecode.Reg)
         
         case todo

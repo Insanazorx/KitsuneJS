@@ -521,7 +521,7 @@ extension Parser : Parsers {
         case .objectLiteral(let objPat):
             let destPattern: DestructuringPattern
             do {
-                destPattern = .object(properties: try objPat.map {
+                destPattern = .object(properties: objPat.map {
                 switch $0 {
                     case ObjectProperty.shorthand(let name):
                         return DestructuringObjectProperty.shorthand(name)
@@ -554,9 +554,7 @@ extension Parser : Parsers {
                         fatalError("Unexpected object property type in ConvertExprToDestructingPattern: \($0)")
                 }
                 
-            })} catch {
-                fatalError("Will be fixed later with proper error handling: \(error)")
-            }
+            })}
 
             return destPattern 
 

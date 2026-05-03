@@ -18,6 +18,7 @@ func main() {
     print ("Tokens from grammar file:");
     let parser = Parser(tokens);
     print ("----------------------------------");
+
     do {
       let ast = try parser.parse();
       
@@ -30,21 +31,26 @@ func main() {
       scopeAnalyzer.analyze()
       scopeAnalyzer.renderDescription()
       
+      
       print ("-----------------------------------")
 
       let compiler = BytecodeCompiler(compilationUnit: scopeAnalyzer.compilationUnit)
       compiler.compile()
-      compiler.printCompilationResult()
+      print(compiler)
+
+      dumpToFile(scopeAnalyzer: scopeAnalyzer, compilerDump: compiler.description)
       
       } catch {
         print("Parsing error: \(error)");
-    }
+      }
+
+
+
 }
-main();
 
-
-    /*let fileURL2 = URL(fileURLWithPath: "output.txt")
-
+func dumpToFile(scopeAnalyzer: ScopeAnalyzer, compilerDump: String) {
+    let fileURL2 = URL(fileURLWithPath: "output.txt")
+    
     do {
       var stringToWrite: String = ""
       stringToWrite += scopeAnalyzer.compilationUnit.renderDescription()
@@ -53,8 +59,15 @@ main();
         stringToWrite += "\nNode ID: \(nodeIdForCounting)-> \(scopeAnalyzer.astLineerizer.walker.descs[nodeIdForCounting]) -> Scope ID: \(scopeId)"
         nodeIdForCounting += 1
       }
+
+      stringToWrite += "\n\n\n------------------\n\n\n"
+      stringToWrite += compilerDump
+      
       try stringToWrite.write(to: fileURL2, atomically: true, encoding: .utf8)
       print("Output written to output.txt")
     } catch {
       print("Hata:", error)
-    }*/
+    }
+
+}
+main();

@@ -111,6 +111,7 @@ extension DeclBinder: NodeWalker {
         let mutable = kind == .variable || (kind == .lexical(isConst: false))
         let has_tdz = kind == .class || (kind == .lexical(isConst: true))
         let is_hoisted = kind == .variable
+        let is_global = scopeId == 0 // global scope has id 0, but we will need to update this later for cases like global eval or global indirect eval where new bindings can be added to the global scope after the initial creation of the global scope.
 
 
         let binding = Binding(
@@ -122,7 +123,7 @@ extension DeclBinder: NodeWalker {
             mutable: mutable,
             has_tdz: has_tdz,
             is_hoisted: is_hoisted,
-            is_global: false, // will be updated later if it's in global scope
+            is_global: is_global, // will be updated later if it's in global scope
             is_module: false, // will be updated later if it's in module scope
             is_implicit: false
         )
@@ -154,7 +155,7 @@ extension DeclBinder: NodeWalker {
         let mutable = kind == .variable || (kind == .lexical(isConst: false))
         let has_tdz = kind == .class || (kind == .lexical(isConst: true))
         let is_hoisted = kind == .variable
-
+        let is_global = scopeId == 0 // global scope has id 0, but we will need to update this later for cases like global eval or global indirect eval where new bindings can be added to the global scope after the initial creation of the global scope.
 
         let binding = Binding(
             kind: kind,
@@ -165,7 +166,7 @@ extension DeclBinder: NodeWalker {
             mutable: mutable,
             has_tdz: has_tdz,
             is_hoisted: is_hoisted,
-            is_global: false, // will be updated later if it's in global scope
+            is_global: is_global, // will be updated later if it's in global scope
             is_module: false, // will be updated later if it's in module scope
             is_implicit: false
         )
