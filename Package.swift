@@ -5,14 +5,27 @@ import PackageDescription
 
 let package = Package(
     name: "swift",
+    products: [
+        .executable(name: "swift", targets: ["swift"]),
+        .executable(name: "swift-backend-smoke", targets: ["swift-backend-smoke"]),
+        .library(name: "BackendBridge", targets: ["BackendBridge"]),
+    ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .executableTarget(
             name: "swift",
+            path: "Sources/Frontend",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
+        ),
+        .target(
+            name: "BackendBridge",
+            path: "Sources/Bridge/Swift"
+        ),
+        .executableTarget(
+            name: "swift-backend-smoke",
+            dependencies: ["BackendBridge"],
+            path: "Sources/Bridge/SwiftSmoke"
         ),
     ]
 )

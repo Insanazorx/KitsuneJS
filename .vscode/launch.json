@@ -4,9 +4,9 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:swift}",
-            "name": "Debug swift",
-            "preLaunchTask": "swift: Build Debug swift",
+            "cwd": "${workspaceFolder}",
+            "name": "Frontend (Swift Debug)",
+            "preLaunchTask": "Build Swift Frontend",
             "target": "swift",
             "configuration": "debug"
         },
@@ -14,9 +14,9 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:swift}",
-            "name": "Release swift",
-            "preLaunchTask": "swift: Build Release swift",
+            "cwd": "${workspaceFolder}",
+            "name": "Frontend (Swift Release)",
+            "preLaunchTask": "Build Swift Frontend Release",
             "target": "swift",
             "configuration": "release"
         },
@@ -24,19 +24,73 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:swift}",
-            "name": "Debug Main",
-            "program": "${workspaceFolder:swift}/.build/debug/Main",
-            "preLaunchTask": "swift: Build Debug Main"
+            "cwd": "${workspaceFolder}",
+            "name": "Frontend + Backend Bridge",
+            "preLaunchTask": "Build Hybrid Debug",
+            "target": "swift-backend-smoke",
+            "configuration": "debug",
+            "env": {
+                "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
+            }
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:swift}",
-            "name": "Release Main",
-            "program": "${workspaceFolder:swift}/.build/release/Main",
-            "preLaunchTask": "swift: Build Release Main"
+            "cwd": "${workspaceFolder}",
+            "name": "Backend Bridge Smoke",
+            "preLaunchTask": "Build Hybrid Debug",
+            "target": "swift-backend-smoke",
+            "configuration": "debug",
+            "env": {
+                "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
+            }
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "name": "Debug swift",
+            "target": "swift",
+            "configuration": "debug",
+            "preLaunchTask": "Build Swift Frontend"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "name": "Release swift",
+            "target": "swift",
+            "configuration": "release",
+            "preLaunchTask": "Build Swift Frontend Release"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "name": "Debug swift-backend-smoke",
+            "target": "swift-backend-smoke",
+            "configuration": "debug",
+            "preLaunchTask": "Build Hybrid Debug",
+            "env": {
+                "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
+            }
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "name": "Release swift-backend-smoke",
+            "target": "swift-backend-smoke",
+            "configuration": "release",
+            "preLaunchTask": "Build Backend Bridge Smoke Release",
+            "env": {
+                "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
+            }
         }
     ]
 }

@@ -1,0 +1,6 @@
+{
+  "cmake.configureOnOpen": true,
+  "cmake.useCMakePresets": "always",
+  "cmake.buildPreset": "CLionMainConf",
+  "cmake.configurePreset": "CLionMainConf"
+}

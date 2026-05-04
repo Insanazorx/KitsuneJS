@@ -1,0 +1,23 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "CLionMainConf",
+      "displayName": "CLionMainConf",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build/cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "CLionMainConf",
+      "configurePreset": "CLionMainConf",
+      "targets": [
+        "CLionMainConf"
+      ]
+    }
+  ]
+}

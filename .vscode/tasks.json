@@ -1,0 +1,156 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Prepare SwiftPM Workspace Cache",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-E",
+        "make_directory",
+        "${workspaceFolder}/.build/swiftpm-home",
+        "${workspaceFolder}/.build/swiftpm-module-cache"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Swift Frontend",
+      "type": "shell",
+      "command": "swift",
+      "args": [
+        "build",
+        "--disable-sandbox",
+        "--product",
+        "swift"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HOME": "${workspaceFolder}/.build/swiftpm-home",
+          "CLANG_MODULE_CACHE_PATH": "${workspaceFolder}/.build/swiftpm-module-cache"
+        }
+      },
+      "dependsOn": [
+        "Prepare SwiftPM Workspace Cache"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Swift Frontend Release",
+      "type": "shell",
+      "command": "swift",
+      "args": [
+        "build",
+        "--disable-sandbox",
+        "-c",
+        "release",
+        "--product",
+        "swift"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HOME": "${workspaceFolder}/.build/swiftpm-home",
+          "CLANG_MODULE_CACHE_PATH": "${workspaceFolder}/.build/swiftpm-module-cache"
+        }
+      },
+      "dependsOn": [
+        "Prepare SwiftPM Workspace Cache"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Configure Hybrid Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--preset",
+        "CLionMainConf"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Hybrid Debug",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "--preset",
+        "CLionMainConf"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [
+        "Configure Hybrid Debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Backend Bridge Smoke Release",
+      "type": "shell",
+      "command": "swift",
+      "args": [
+        "build",
+        "--disable-sandbox",
+        "-c",
+        "release",
+        "--product",
+        "swift-backend-smoke"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HOME": "${workspaceFolder}/.build/swiftpm-home",
+          "CLANG_MODULE_CACHE_PATH": "${workspaceFolder}/.build/swiftpm-module-cache"
+        }
+      },
+      "dependsOn": [
+        "Build Hybrid Debug"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Frontend",
+      "type": "shell",
+      "command": "swift",
+      "args": [
+        "run",
+        "--disable-sandbox",
+        "swift"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "HOME": "${workspaceFolder}/.build/swiftpm-home",
+          "CLANG_MODULE_CACHE_PATH": "${workspaceFolder}/.build/swiftpm-module-cache"
+        }
+      },
+      "dependsOn": [
+        "Build Swift Frontend"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Frontend + Backend Bridge",
+      "type": "shell",
+      "command": "${workspaceFolder}/.build/cmake/bin/CLionMainConf",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [
+        "Build Hybrid Debug"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
