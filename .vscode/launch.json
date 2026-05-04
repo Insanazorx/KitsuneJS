@@ -50,31 +50,31 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift}",
             "name": "Debug swift",
             "target": "swift",
             "configuration": "debug",
-            "preLaunchTask": "Build Swift Frontend"
+            "preLaunchTask": "swift: Build Debug swift"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift}",
             "name": "Release swift",
             "target": "swift",
             "configuration": "release",
-            "preLaunchTask": "Build Swift Frontend Release"
+            "preLaunchTask": "swift: Build Release swift"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift}",
             "name": "Debug swift-backend-smoke",
             "target": "swift-backend-smoke",
             "configuration": "debug",
-            "preLaunchTask": "Build Hybrid Debug",
+            "preLaunchTask": "swift: Build Debug swift-backend-smoke",
             "env": {
                 "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
             }
@@ -83,11 +83,11 @@
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder:swift}",
             "name": "Release swift-backend-smoke",
             "target": "swift-backend-smoke",
             "configuration": "release",
-            "preLaunchTask": "Build Backend Bridge Smoke Release",
+            "preLaunchTask": "swift: Build Release swift-backend-smoke",
             "env": {
                 "JS_BACKEND_CABI_LIBRARY": "${workspaceFolder}/.build/cmake/lib/libJSBackendCABI.dylib"
             }

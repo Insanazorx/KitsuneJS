@@ -1,16 +1,16 @@
 class BytecodeCompiler {
 
     var compilationUnit: CompilationUnit
-    var bytecodeCompilation: [Bytecode] = []
+    var serializationUnit: SerializationUnit
+    
     var constantsPool: [String: UInt32] = [:]
     var functionTable: [Bytecode.FunctionID: [BasicBlock]] = [:]
+    var GlobalBasicBlocks: [BasicBlock] = []
     
     var currentBlock: BasicBlock 
     var VirtualCallStack: [Bytecode.FunctionID] = []
-    var GlobalBasicBlocks: [BasicBlock] = []
     var blockCounter: Int = 0
 
-    
     var regCounter: UInt16 = 0
     var ContinuousRegistersMode: Bool = false //MARK: TODO: dummy for now, used in "argsBase" in emit(.call), it ensures that the registers are allocated in a continuous manner
 
@@ -24,8 +24,9 @@ class BytecodeCompiler {
 
     var universalUndefinedReg: Bytecode.Reg? = nil // a register that holds the "undefined" value, to be reused whenever we need to load "undefined", to save bytecode space
 
-    init(compilationUnit: CompilationUnit) {
+    init(compilationUnit: CompilationUnit, serializationUnit: SerializationUnit) {
         self.compilationUnit = compilationUnit
+        self.serializationUnit = serializationUnit
         self.currentBlock = BasicBlock(id: 0)
         self.GlobalBasicBlocks.append(self.currentBlock)
     }
@@ -35,7 +36,6 @@ extension BytecodeCompiler {
 
     func putDebugMark(_ comment: String) {
         #if DEBUG
-        //emit(.debugMark(id: UInt32(currentNodeId), comment: comment))
         #endif
     }
     
@@ -195,6 +195,7 @@ extension BytecodeCompiler {
         
         return reg
     }
+
 }
 
 
@@ -1344,6 +1345,16 @@ extension BytecodeCompiler {
         
     }
 }
+
+extension BytecodeCompiler {
+    func exportSerializationUnit() -> SerializationUnit {
+        serializationUnit.constantsPool = constantsPool
+        serializationUnit.functionTable = functionTable
+        serializationUnit.globalBasicBlocks = GlobalBasicBlocks
+        return serializationUnit
+    }
+}
+
 
 extension BytecodeCompiler: CustomStringConvertible {
     

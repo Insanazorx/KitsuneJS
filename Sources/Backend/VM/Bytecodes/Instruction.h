@@ -6,23 +6,27 @@ namespace JSBackend::Interpreter {
     class Instruction {
     public:
         virtual ~Instruction() = default;
-        uint32_t offset()
+        void setOffset(uint32_t offset) {this->offset = offset;}
+        uint32_t Offset() const {return offset;}
+        uint32_t offset = 0;
     };
 
 
 #define OPERAND_EXPANDER(TYPE, NAME)        \
     public:                                 \
-    void set_##NAME(TYPE param) {NAME = 0}  \
-    TYPE get_##NAME() {return NAME}         \
+    void set_##NAME(TYPE param) {m_##NAME = 0;}  \
+    TYPE NAME() {return m_##NAME;}         \
     private:                                \
-    TYPE NAME = 0
+    TYPE m_##NAME = 0;
 
 #define INSTRUCTION_CLASSES(NAME, OPERANDS)         \
     class NAME##Instruction : public Instruction {  \
-       BC_ALL(OPERAND_EXPANDER)                     \
+       OPERANDS(OPERAND_EXPANDER)                     \
        public:                                      \
-       Op OpType() {return Op::NAME}                \
-    }
+       Bytecode::Op OpType() {return Bytecode::Op::NAME;}      \
+    };
+
+    BC_ALL(INSTRUCTION_CLASSES)
 
 }
 

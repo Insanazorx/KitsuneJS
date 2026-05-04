@@ -34,9 +34,20 @@ func main() {
       
       print ("-----------------------------------")
 
-      let compiler = BytecodeCompiler(compilationUnit: scopeAnalyzer.compilationUnit)
+      let serializationUnit = SerializationUnit()
+      let compiler = BytecodeCompiler(
+        compilationUnit: scopeAnalyzer.compilationUnit,
+        serializationUnit: serializationUnit
+      )
       compiler.compile()
       print(compiler)
+
+      _ = compiler.exportSerializationUnit()
+
+      let serializer = Serializer(serializationUnit: serializationUnit)
+      serializer.serialize()
+      print(serializer)
+
 
       dumpToFile(scopeAnalyzer: scopeAnalyzer, compilerDump: compiler.description)
       

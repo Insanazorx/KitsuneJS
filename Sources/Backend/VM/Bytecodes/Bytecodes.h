@@ -826,6 +826,7 @@ namespace JSBackend::Bytecode {
     inline uint32_t instructionLength(Op op) {
         switch (op) {
             BC_ALL(BC_WHOLE_INST_SIZE_CASE)
+
         default:
             return sizeof(Op);
         }
