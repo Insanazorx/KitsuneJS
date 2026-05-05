@@ -22,6 +22,10 @@ class Serializer {
 }
 
 extension Serializer {
+
+    func exportBytecode() -> [UInt8] {
+        return SerializedBytecode
+    }
     
     func incrementOffset(by amount: UInt32) {
         offsetCounter += amount
@@ -1025,3 +1029,4 @@ extension Serializer {
         serializeCallSlot(slot)
     }
 }
+

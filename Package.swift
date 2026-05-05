@@ -13,6 +13,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "swift",
+            dependencies: ["BackendBridge"],
             path: "Sources/Frontend",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))

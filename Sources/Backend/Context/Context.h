@@ -5,6 +5,7 @@
 #include <exception>
 #include <string>
 #include <vector>
+#include <iostream>
 
 namespace JSBackend {
 
@@ -53,6 +54,7 @@ public:
         }
 
         try {
+            std::cout << "Running backend context with " << serializedBytecode_.size() << " bytes of serialized bytecode." << std::endl;
             // Backend pipeline entry point:
             // 1. Decode serializedBytecode_ into your bytecode/module format.
             // 2. Create the VM/interpreter instance.

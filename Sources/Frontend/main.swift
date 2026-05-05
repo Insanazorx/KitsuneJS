@@ -1,4 +1,5 @@
 import Foundation
+import BackendBridge
 
 func main() {
     let fileURL = URL(fileURLWithPath: "input.js")
@@ -48,6 +49,17 @@ func main() {
       serializer.serialize()
       print(serializer)
 
+      let bytecode = serializer.exportBytecode()
+      try writeBytecodeIfRequested(bytecode)
+
+      if shouldSkipBackendRun() {
+        print("Backend run skipped by JS_FRONTEND_SKIP_BACKEND_RUN.")
+      } else {
+        let backendLibrary = try BackendLibrary()
+        let context = try backendLibrary.makeContext()
+        try context.loadSerializedBytecode(bytecode)
+        try context.run()
+      }
 
       dumpToFile(scopeAnalyzer: scopeAnalyzer, compilerDump: compiler.description)
       
@@ -58,6 +70,28 @@ func main() {
 
 
 }
+
+func writeBytecodeIfRequested(_ bytecode: [UInt8]) throws {
+    guard let outputPath = ProcessInfo.processInfo.environment["JS_FRONTEND_BYTECODE_OUTPUT"],
+          !outputPath.isEmpty else {
+        return
+    }
+
+    let outputURL = URL(fileURLWithPath: outputPath)
+    try FileManager.default.createDirectory(
+        at: outputURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+    try Data(bytecode).write(to: outputURL, options: .atomic)
+    print("Serialized bytecode written to \(outputPath) (\(bytecode.count) bytes).")
+}
+
+func shouldSkipBackendRun() -> Bool {
+    let value = ProcessInfo.processInfo.environment["JS_FRONTEND_SKIP_BACKEND_RUN"] ?? ""
+    return value == "1" || value.lowercased() == "true"
+}
+
+
 
 func dumpToFile(scopeAnalyzer: ScopeAnalyzer, compilerDump: String) {
     let fileURL2 = URL(fileURLWithPath: "output.txt")
