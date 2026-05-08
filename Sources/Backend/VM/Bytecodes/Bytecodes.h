@@ -1,5 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <optional>
+
+namespace JSBackend::Bytecode {
 
 // Common types
 using Reg = uint16_t;
@@ -24,6 +27,12 @@ using IntrinsicID = uint16_t;
 using PropertyFlags = uint8_t;
 using IteratorKind = uint8_t;
 using ResumeKind = uint8_t;
+// 0 => raw relative/absolute offset payload, 1 => serializer-backpatched target payload.
+using BackpatchOrJumpOffsetIndicator = uint8_t;
+using OptionalReg = std::optional<Reg>;
+using OptionalProfileSlot = std::optional<ProfileSlot>;
+using OptionalICSlot = std::optional<ICSlot>;
+using OptionalCallSlot = std::optional<CallSlot>;
 
 
 // Bytecode Ops
@@ -242,7 +251,7 @@ using ResumeKind = uint8_t;
 
 // Bytecode Operands
 
-#define OPERANDS_NONE(V)
+#define OPERANDS_NONE(V)\
 
 #define OPERANDS_DST(V) \
     V(Reg, dst)
@@ -303,7 +312,7 @@ using ResumeKind = uint8_t;
 #define OPERANDS_CREATE_CLASS(V) \
     V(Reg, dst) \
     V(FunctionID, constructor) \
-    V(Reg, protoParent) \
+    V(OptionalReg, protoParent) \
     V(CPIndex, metadata)
 
 #define OPERANDS_SET_HOME_OBJECT(V) \
@@ -357,17 +366,17 @@ using ResumeKind = uint8_t;
 #define OPERANDS_RESOLVE_NAME(V) \
     V(Reg, dst) \
     V(CPIndex, name) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_GET_GLOBAL_LEXICAL(V) \
     V(Reg, dst) \
     V(GlobalSlot, slot) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_PUT_GLOBAL_LEXICAL(V) \
     V(GlobalSlot, slot) \
     V(Reg, src) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_INIT_GLOBAL_LEXICAL(V) \
     V(GlobalSlot, slot) \
@@ -376,12 +385,12 @@ using ResumeKind = uint8_t;
 #define OPERANDS_GET_GLOBAL_VAR(V) \
     V(Reg, dst) \
     V(GlobalSlot, slot) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_GLOBAL_VAR(V) \
     V(GlobalSlot, slot) \
     V(Reg, src) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_INIT_GLOBAL_VAR(V) \
     V(GlobalSlot, slot) \
@@ -390,17 +399,17 @@ using ResumeKind = uint8_t;
 #define OPERANDS_GET_GLOBAL_PROPERTY(V) \
     V(Reg, dst) \
     V(CPIndex, name) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_GLOBAL_PROPERTY(V) \
     V(CPIndex, name) \
     V(Reg, src) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_TYPEOF_GLOBAL(V) \
     V(Reg, dst) \
     V(GlobalSlot, slot) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_DELETE_GLOBAL(V) \
     V(Reg, dst) \
@@ -410,53 +419,53 @@ using ResumeKind = uint8_t;
     V(Reg, dst) \
     V(Reg, base) \
     V(CPIndex, name) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_BY_ID(V) \
     V(Reg, base) \
     V(CPIndex, name) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_BY_VAL(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, key) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_BY_VAL(V) \
     V(Reg, base) \
     V(Reg, key) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_BY_ID_WITH_THIS(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, thisValue) \
     V(CPIndex, name) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_BY_VAL_WITH_THIS(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, key) \
     V(Reg, thisValue) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_METHOD_BY_ID(V) \
     V(Reg, callee) \
     V(Reg, thisValue) \
     V(Reg, base) \
     V(CPIndex, name) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_METHOD_BY_VAL(V) \
     V(Reg, callee) \
     V(Reg, thisValue) \
     V(Reg, base) \
     V(Reg, key) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_DEFINE_OWN_BY_ID(V) \
     V(Reg, base) \
@@ -474,31 +483,31 @@ using ResumeKind = uint8_t;
     V(Reg, dst) \
     V(Reg, base) \
     V(CPIndex, name) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_DELETE_BY_VAL(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, key) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_HAS_PROPERTY(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, key) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_IN_BY_ID(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(CPIndex, name) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_IN_BY_VAL(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(Reg, key) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_GET_PRIVATE_BY_ID(V) \
     V(Reg, dst) \
@@ -515,66 +524,66 @@ using ResumeKind = uint8_t;
     V(Reg, thisValue) \
     V(Reg, homeObject) \
     V(CPIndex, name) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_SUPER_BY_ID(V) \
     V(Reg, thisValue) \
     V(Reg, homeObject) \
     V(CPIndex, name) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_SUPER_BY_VAL(V) \
     V(Reg, dst) \
     V(Reg, thisValue) \
     V(Reg, homeObject) \
     V(Reg, key) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_SUPER_BY_VAL(V) \
     V(Reg, thisValue) \
     V(Reg, homeObject) \
     V(Reg, key) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_LENGTH(V) \
     V(Reg, dst) \
     V(Reg, base) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_LENGTH(V) \
     V(Reg, base) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_GET_BY_INDEX(V) \
     V(Reg, dst) \
     V(Reg, base) \
     V(uint32_t, index) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_PUT_BY_INDEX(V) \
     V(Reg, base) \
     V(uint32_t, index) \
     V(Reg, value) \
-    V(ICSlot, cache)
+    V(OptionalICSlot, cache)
 
 #define OPERANDS_ARRAY_PUSH(V) \
     V(Reg, dst) \
     V(Reg, array) \
     V(Reg, value) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_ARRAY_POP(V) \
     V(Reg, dst) \
     V(Reg, array) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_UNARY_PROFILE(V) \
     V(Reg, dst) \
     V(Reg, src) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_UNARY_NO_PROFILE(V) \
     V(Reg, dst) \
@@ -584,19 +593,19 @@ using ResumeKind = uint8_t;
     V(Reg, dst) \
     V(Reg, lhs) \
     V(Reg, rhs) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_INSTANCE_OF(V) \
     V(Reg, dst) \
     V(Reg, value) \
     V(Reg, constructor) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_IN_OPERATOR(V) \
     V(Reg, dst) \
     V(Reg, key) \
     V(Reg, base) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_CALL(V) \
     V(Reg, dst) \
@@ -604,7 +613,7 @@ using ResumeKind = uint8_t;
     V(Reg, thisValue) \
     V(Reg, argsBase) \
     V(ArgCount, argc) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_CALL_DIRECT(V) \
     V(Reg, dst) \
@@ -612,53 +621,55 @@ using ResumeKind = uint8_t;
     V(Reg, thisValue) \
     V(Reg, argsBase) \
     V(ArgCount, argc) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_CALL_VARARGS(V) \
     V(Reg, dst) \
     V(Reg, callee) \
     V(Reg, thisValue) \
     V(Reg, argsArray) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_TAIL_CALL(V) \
     V(Reg, callee) \
     V(Reg, thisValue) \
     V(Reg, argsBase) \
     V(ArgCount, argc) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_CONSTRUCT(V) \
     V(Reg, dst) \
     V(Reg, callee) \
     V(Reg, argsBase) \
     V(ArgCount, argc) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_CONSTRUCT_VARARGS(V) \
     V(Reg, dst) \
     V(Reg, callee) \
     V(Reg, argsArray) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_SUPER_CONSTRUCT(V) \
     V(Reg, dst) \
     V(Reg, callee) \
     V(Reg, argsBase) \
     V(ArgCount, argc) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_SUPER_CONSTRUCT_VARARGS(V) \
     V(Reg, dst) \
     V(Reg, callee) \
     V(Reg, argsArray) \
-    V(CallSlot, call)
+    V(OptionalCallSlot, call)
 
 #define OPERANDS_JUMP(V) \
+    V(BackpatchOrJumpOffsetIndicator, indicator)\
     V(JumpOffset, offset)
 
 #define OPERANDS_JUMP_IF_REG(V) \
     V(Reg, value) \
+    V(BackpatchOrJumpOffsetIndicator, indicator)\
     V(JumpOffset, offset)
 
 #define OPERANDS_SWITCH(V) \
@@ -678,16 +689,16 @@ using ResumeKind = uint8_t;
     V(Reg, dst) \
     V(Reg, value) \
     V(IteratorKind, kind) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_ITERATOR_PROFILE(V) \
     V(Reg, dst) \
     V(Reg, iterator) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_ITERATOR_CLOSE(V) \
     V(Reg, iterator) \
-    V(ProfileSlot, profile)
+    V(OptionalProfileSlot, profile)
 
 #define OPERANDS_GET_MODULE_VARIABLE(V) \
     V(Reg, dst) \
@@ -736,7 +747,7 @@ using ResumeKind = uint8_t;
     V(Reg, dst) \
     V(Reg, promise) \
     V(Reg, onFulfilled) \
-    V(Reg, onRejected)
+    V(OptionalReg, onRejected)
 
 #define OPERANDS_ENQUEUE_MICROTASK(V) \
     V(Reg, job)
@@ -758,6 +769,7 @@ using ResumeKind = uint8_t;
 
 #define OPERANDS_JUMP_IF_RESUME_KIND(V) \
     V(ResumeKind, kind) \
+    V(BackpatchOrJumpOffsetIndicator, indicator) \
     V(JumpOffset, offset)
 
 #define OPERANDS_GENERATOR_SUSPEND(V) \
@@ -791,10 +803,12 @@ using ResumeKind = uint8_t;
 #define OPERANDS_CHECK_STRUCTURE(V) \
     V(Reg, reg) \
     V(StructureSetID, structures) \
+    V(BackpatchOrJumpOffsetIndicator, indicator) \
     V(JumpOffset, fail)
 
 #define OPERANDS_CHECK_REG_FAIL(V) \
     V(Reg, reg) \
+    V(BackpatchOrJumpOffsetIndicator, indicator) \
     V(JumpOffset, fail)
 
 #define OPERANDS_RUNTIME_CALL(V) \
@@ -809,21 +823,44 @@ using ResumeKind = uint8_t;
     V(Reg, argsBase) \
     V(ArgCount, argc)
 
+
+
 //-------------------------------------------------------------------------------------
 
-namespace JSBackend::Bytecode {
-
-    enum class Op : uint16_t {
+    enum class Op : uint8_t {
     #define DECL_OP(name, operands) name,
         BC_ALL(DECL_OP)
     #undef DECL_OP
     };
 
-    #define BC_OPERAND_SIZE(type, name) + sizeof(type)
+    template <typename T>
+    inline constexpr uint32_t encodedOperandSize = sizeof(T);
+
+    template <typename T>
+    inline constexpr uint32_t encodedOperandSize<std::optional<T>> = 1 + encodedOperandSize<T>;
+
+    #define BC_OPERAND_SIZE(type, name) + encodedOperandSize<type>
     #define BC_WHOLE_INST_SIZE_CASE(name, operands) \
         case Op::name: return sizeof(Op) operands(BC_OPERAND_SIZE);
 
     inline uint32_t instructionLength(Op op) {
+        switch (op) {
+            case Op::nop:
+            case Op::debugDumpScope:
+            case Op::unreachable:
+            case Op::halt:
+            case Op::enterGlobal:
+            case Op::enterFunction:
+            case Op::popLexicalEnvironment:
+            case Op::returnUndefined:
+            case Op::rethrow:
+            case Op::clearException:
+            case Op::generatorEnter:
+            case Op::checkStack:
+                return 1;
+            default:
+                break;
+        }
         switch (op) {
             BC_ALL(BC_WHOLE_INST_SIZE_CASE)
 

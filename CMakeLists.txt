@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(JSBackendHybrid LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -74,7 +74,8 @@ add_custom_target(BuildSwiftFrontend
 
 add_executable(RunSwift ${JSBACKEND_SOURCE_ROOT}/Tools/RunSwift.cpp
         Sources/Backend/VM/Bytecodes/Decoder.h
-        Sources/Backend/VM/Bytecodes/Decoder.cpp)
+        Sources/Backend/VM/Bytecodes/Decoder.cpp
+)
 add_dependencies(RunSwift BuildSwiftFrontend)
 target_compile_definitions(RunSwift
     PRIVATE
@@ -88,7 +89,8 @@ add_executable(CLionMainConf ${JSBACKEND_SOURCE_ROOT}/Tools/CLionMainConf.cpp
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/JSValue.h
         Sources/Backend/VM/Bytecodes/Decoder.h
-        Sources/Backend/VM/Bytecodes/Decoder.cpp)
+        Sources/Backend/VM/Bytecodes/Decoder.cpp
+)
 target_sources(CLionMainConf PRIVATE ${JSBACKEND_IDE_ONLY_SOURCES})
 target_link_libraries(CLionMainConf PRIVATE JSBackendCABI)
 target_compile_definitions(CLionMainConf

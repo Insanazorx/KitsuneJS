@@ -7,6 +7,8 @@
 #include <vector>
 #include <iostream>
 
+#include "Bytecodes/Decoder.h"
+
 namespace JSBackend {
 
 enum class PipelineStage {
@@ -55,11 +57,13 @@ public:
 
         try {
             std::cout << "Running backend context with " << serializedBytecode_.size() << " bytes of serialized bytecode." << std::endl;
-            // Backend pipeline entry point:
-            // 1. Decode serializedBytecode_ into your bytecode/module format.
-            // 2. Create the VM/interpreter instance.
-            // 3. Execute the module/function entry block.
-            //
+
+            Bytecode::Decoder decoder(serializedBytecode_, serializedBytecode_.size());
+            decoder.decode();
+            decoder.result().print();
+
+
+
             // This placeholder intentionally does not interpret yet; it only marks
             // the run boundary so Swift -> C ABI -> C++ can call context.run().
             lastRunBytecodeSize_ = serializedBytecode_.size();

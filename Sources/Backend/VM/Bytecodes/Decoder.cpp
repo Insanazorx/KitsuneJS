@@ -1,26 +1,196 @@
 
 #include "Decoder.h"
 
-
+#include <iostream>
 
 namespace JSBackend::Bytecode {
-    #define BC_HANDLER_CASE(NAME, OPERANDS) \
-    case Op::NAME: \
-        auto bytes = readBytes() \
-        decode_##NAME(bytes);
 
     void Decoder::decode() {
-        while (hasMore()) {
-            uint8_t opByte = readByte();
-            Op op = static_cast<Op>(opByte);
-            switch (op) {
+        verifyHeader();
+        decodeSectionTable();
+
+        verifySectionSeparator();
+        if (m_offset != m_instructionsStartOffset) {
+            throw std::runtime_error("Invalid bytecode: code section offset mismatch");
+        }
+        decodeInstructions();
+
+        verifySectionSeparator();
+        if (m_offset != m_functionTableStartOffset) {
+            throw std::runtime_error("Invalid bytecode: function table section offset mismatch");
+        }
+        decodeFunctionTable();
+
+        verifySectionSeparator();
+        if (m_offset != m_constantPoolStartOffset) {
+            throw std::runtime_error("Invalid bytecode: constant pool section offset mismatch");
+        }
+        decodeConstantPool();
+    }
+
+    void Decoder::verifyHeader() {
+
+        auto bytes = readBytes(12);
+
+        if (bytes.size() < 12) {
+            throw std::runtime_error("Invalid bytecode: insufficient header length");
+        }
+
+        std::vector<uint8_t> expectedHeader = {
+            0xDE, 0xAD, 0xBE, 0xEF,
+            0xCA, 0xFE, 0xBA, 0xBE,
+            0xFE, 0xED, 0xFA, 0xCE
+        };
+
+        std::span expectedHeaderSpan(expectedHeader);
+
+        if (!equalsAtOffset(m_bytecodes, expectedHeaderSpan,0)) {
+            throw std::runtime_error("Invalid bytecode: header mismatch");
+        }
+
+        readBytes(2); // Skip version
+
+        readBytes(2); // Skip reserved or flags
+
+    }
+
+    void Decoder::verifySectionSeparator() {
+        const auto separator = readBytes(16);
+        std::vector<uint8_t> expectedSeparator = {
+            0xFF, 0xFF, 0xFF, 0xFF,
+            0xCA, 0xFE, 0xBA, 0xBE,
+            0xDE, 0xAD, 0xBE, 0xEF,
+            0xFF, 0xFF, 0xFF, 0xFF
+        };
+        if (separator != expectedSeparator) {
+            throw std::runtime_error("Invalid bytecode: section separator mismatch");
+        }
+    }
+
+    void Decoder::decodeSectionTable() {
+        m_instructionsStartOffset = readUint32();
+        m_functionTableStartOffset = readUint32();
+        m_constantPoolStartOffset = readUint32();
+
+        if (m_instructionsStartOffset > m_length ||
+            m_functionTableStartOffset > m_length ||
+            m_constantPoolStartOffset > m_length) {
+            throw std::runtime_error("Invalid bytecode: section table offset out of range");
+        }
+        if (m_functionTableStartOffset < m_instructionsStartOffset ||
+            m_constantPoolStartOffset < m_functionTableStartOffset) {
+            throw std::runtime_error("Invalid bytecode: section table offsets are not ordered");
+        }
+    }
+
+    void Decoder::decodeFunctionTable() {
+        if (m_constantPoolStartOffset < SectionSeparatorSize) {
+            throw std::runtime_error("Invalid bytecode: constant pool section offset is too small");
+        }
+
+        const auto functionTableEnd = static_cast<size_t>(m_constantPoolStartOffset) - SectionSeparatorSize;
+        if ((functionTableEnd - m_offset) % 8 != 0) {
+            throw std::runtime_error("Invalid bytecode: malformed function table length");
+        }
+
+        while (m_offset < functionTableEnd) {
+            auto id = readUint32();
+            auto offset = readUint32();
+            putFunctionTableEntry(id, offset);
+        }
+    }
+
+    void Decoder::decodeConstantPool() {
+        auto readSingleCPEntry = [this] {
+            auto marker = readBytes(4);
+            auto pattern = std::vector<uint8_t>{0xFA,0xCE,0xFA,0xCE};
+            if (marker != pattern) {
+                throw std::runtime_error("Invalid bytecode: constant pool entry marker mismatch");
+            }
+            auto cpIndex = readUint32();
+            auto value = readString();
+
+            putConstantPoolEntry(cpIndex, value);
+        };
+
+        const auto constantsCount = readUint32();
+        for (uint32_t entryIndex = 0; entryIndex < constantsCount; ++entryIndex) {
+            readSingleCPEntry();
+        }
+    }
+
+
+#define BC_HANDLER_CASE(NAME, OPERANDS) \
+    case Op::NAME: \
+        decode_##NAME(); \
+        break;
+
+
+    void Decoder::decodeInstructions() {
+        if (m_functionTableStartOffset < SectionSeparatorSize) {
+            throw std::runtime_error("Invalid bytecode: function table section offset is too small");
+        }
+
+        const auto codeEnd = static_cast<size_t>(m_functionTableStartOffset) - SectionSeparatorSize;
+        while (hasMore(codeEnd)) {
+            uint8_t opByte = m_bytecodes[m_offset];
+            switch (static_cast<Op>(opByte)) {
                 BC_ALL(BC_HANDLER_CASE)
             default:
-                throw std::runtime_error("Unknown opcode: " + std::to_string(opByte));
+                throw std::runtime_error("Invalid bytecode: unknown opcode " + std::to_string(opByte) +
+                                         " at offset " + std::to_string(m_offset));
+            }
+
+            if (m_offset > codeEnd) {
+                throw std::runtime_error("Invalid bytecode: instruction crosses code section boundary");
             }
         }
     }
-    #define DEFINE_HANDLER(NAME, OPERANDS) Interpreter::Instruction decode_##NAME(const uint8_t[instructionLength(Op::NAME)] bytes)
+
+#undef BC_HANDLER_CASE
 
 
+#define READ_OPERAND(TYPE, NAME) \
+    instruction->set_##NAME(readOperand<TYPE>());
+
+#define DEFINE_HANDLER(NAME, OPERANDS) \
+    void Decoder::decode_##NAME() { \
+        auto instruction = std::make_unique<Interpreter::NAME##Instruction>(); \
+        instruction->setOffset(m_offset); \
+        readByte();    \
+        try {                                   \
+            OPERANDS(READ_OPERAND)                \
+        } catch(std::exception& e) {                           \
+            throw std::runtime_error(std::string("Invalid bytecode: in handler of " + std::string(#NAME) + ": " + e.what()) + " offset: " + std::to_string(m_offset));                                        \
+        }                                         \
+        putInstruction(std::move(instruction)); \
+    }
+
+    BC_ALL(DEFINE_HANDLER)
+
+#undef DEFINE_HANDLER
+#undef READ_OPERAND
+
+    void DecodeResult::print() const {
+            const auto previousFlags = std::cout.flags();
+            std::cout << "Decoded Bytecode:\n";
+
+            std::cout << "Instructions:\n";
+            for (const auto& instr : instructions) {
+                if (instr == nullptr) {
+                    continue;
+                }
+                std::cout << std::hex << instr->offset() << "  " << instr->toString() << "\n";
+            }
+            std::cout << std::dec;
+            std::cout << "Function Table:\n";
+            for (const auto& entry : functionTable) {
+                std::cout << "  ID: " << entry.first << ", Offset: " << entry.second << "\n";
+            }
+            std::cout << "Constant Pool:\n";
+            for (const auto& entry : constantPool) {
+                std::cout << "  Index: " << entry.first << ", Value: " << entry.second << "\n";
+            }
+            std::cout.flags(previousFlags);
+    }
 }

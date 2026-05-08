@@ -19,7 +19,7 @@ namespace JSBackend::GarbageCollector {
         void unmark () { marked = 0; }
         bool is_marked () const { return marked; }
 
-    private:
+    protected:
         JSCell* next {nullptr};
         uint8_t marked : 1 {0};
         uint16_t size : 11 {0};

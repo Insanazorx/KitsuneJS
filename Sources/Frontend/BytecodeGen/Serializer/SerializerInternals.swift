@@ -7,6 +7,7 @@ enum Opcode: UInt8 {
     case debugDumpScope
     case debugDumpIC
     case unreachable
+    case halt
 
     // MARK: - Start markers
     case enterGlobal
@@ -262,8 +263,6 @@ enum Opcode: UInt8 {
     case checkStack
     case runtimeCall
     case intrinsicCall
-
-    case halt = 0xFF
 }
 
 extension Bytecode {
