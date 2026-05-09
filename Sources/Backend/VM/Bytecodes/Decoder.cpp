@@ -25,7 +25,13 @@ namespace JSBackend::Bytecode {
         if (m_offset != m_constantPoolStartOffset) {
             throw std::runtime_error("Invalid bytecode: constant pool section offset mismatch");
         }
-        decodeConstantPool();
+        decodeConstantPools();
+
+        if (m_offset != m_length) {
+            throw std::runtime_error("Invalid bytecode: trailing bytes after constant pools");
+        }
+
+        buildCodeBlocks();
     }
 
     void Decoder::verifyHeader() {
@@ -100,22 +106,95 @@ namespace JSBackend::Bytecode {
         }
     }
 
-    void Decoder::decodeConstantPool() {
-        auto readSingleCPEntry = [this] {
+    void Decoder::decodeConstantPools() {
+        auto readSingleCPEntry = [this](uint32_t codeBlockId) {
             auto marker = readBytes(4);
-            auto pattern = std::vector<uint8_t>{0xFA,0xCE,0xFA,0xCE};
+            auto pattern = std::vector<uint8_t>(ConstantPoolEntryMarker.begin(), ConstantPoolEntryMarker.end());
             if (marker != pattern) {
                 throw std::runtime_error("Invalid bytecode: constant pool entry marker mismatch");
             }
             auto cpIndex = readUint32();
             auto value = readString();
 
-            putConstantPoolEntry(cpIndex, value);
+            putConstantPoolEntry(codeBlockId, cpIndex, value);
         };
 
-        const auto constantsCount = readUint32();
-        for (uint32_t entryIndex = 0; entryIndex < constantsCount; ++entryIndex) {
-            readSingleCPEntry();
+        const auto codeBlockPoolCount = readUint32();
+        for (uint32_t poolIndex = 0; poolIndex < codeBlockPoolCount; ++poolIndex) {
+            auto marker = readBytes(4);
+            auto pattern = std::vector<uint8_t>(
+                CodeBlockConstantPoolMarker.begin(),
+                CodeBlockConstantPoolMarker.end()
+            );
+            if (marker != pattern) {
+                throw std::runtime_error("Invalid bytecode: code block constant pool marker mismatch");
+            }
+
+            const auto codeBlockId = readUint32();
+            if (codeBlockId != Runtime::CodeBlock::GlobalCodeBlockID && !m_result.functionTable.contains(codeBlockId)) {
+                throw std::runtime_error("Invalid bytecode: constant pool for unknown function code block id " + std::to_string(codeBlockId));
+            }
+
+            const auto constantsCount = readUint32();
+            for (uint32_t entryIndex = 0; entryIndex < constantsCount; ++entryIndex) {
+                readSingleCPEntry(codeBlockId);
+            }
+        }
+    }
+
+    void Decoder::buildCodeBlocks() {
+        if (m_functionTableStartOffset < SectionSeparatorSize) {
+            throw std::runtime_error("Invalid bytecode: function table section offset is too small");
+        }
+
+        const auto codeEnd = static_cast<uint32_t>(m_functionTableStartOffset - SectionSeparatorSize);
+
+        std::vector<std::pair<FunctionID, uint32_t>> functionStarts(
+            m_result.functionTable.begin(),
+            m_result.functionTable.end()
+        );
+        std::ranges::sort(functionStarts, [](const auto& lhs, const auto& rhs) {
+            return lhs.second < rhs.second;
+        });
+
+        m_result.globalCodeBlock.id = Runtime::CodeBlock::GlobalCodeBlockID;
+        m_result.globalCodeBlock.startOffset = m_instructionsStartOffset;
+        m_result.globalCodeBlock.endOffset = functionStarts.empty() ? codeEnd : functionStarts.front().second;
+
+        if (m_result.globalCodeBlock.endOffset < m_result.globalCodeBlock.startOffset ||
+            m_result.globalCodeBlock.endOffset > codeEnd) {
+            throw std::runtime_error("Invalid bytecode: malformed global code block range");
+        }
+
+        for (size_t index = 0; index < functionStarts.size(); ++index) {
+            const auto [functionId, startOffset] = functionStarts[index];
+            const auto endOffset = index + 1 < functionStarts.size()
+                ? functionStarts[index + 1].second
+                : codeEnd;
+
+            if (startOffset < m_instructionsStartOffset || startOffset > codeEnd || endOffset < startOffset) {
+                throw std::runtime_error("Invalid bytecode: malformed function code block range for id " + std::to_string(functionId));
+            }
+
+            auto& codeBlock = m_result.functionCodeBlocks[functionId];
+            codeBlock.id = functionId;
+            codeBlock.startOffset = startOffset;
+            codeBlock.endOffset = endOffset;
+        }
+
+        auto attachInstruction = [](Runtime::CodeBlock& codeBlock, Interpreter::Instruction* instruction) {
+            const auto offset = instruction->offset();
+            if (offset >= codeBlock.startOffset && offset < codeBlock.endOffset) {
+                codeBlock.instructions.push_back(instruction);
+            }
+        };
+
+        for (auto* instruction : m_result.instructions) {
+            attachInstruction(m_result.globalCodeBlock, instruction);
+
+            for (auto& [_, codeBlock] : m_result.functionCodeBlocks) {
+                attachInstruction(codeBlock, instruction);
+            }
         }
     }
 
@@ -184,9 +263,27 @@ namespace JSBackend::Bytecode {
             for (const auto& entry : functionTable) {
                 std::cout << "  ID: " << entry.first << ", Offset: " << entry.second << "\n";
             }
-            std::cout << "Constant Pool:\n";
-            for (const auto& entry : constantPool) {
-                std::cout << "  Index: " << entry.first << ", Value: " << entry.second << "\n";
+
+            auto printCodeBlock = [](const char* label, const Runtime::CodeBlock& codeBlock) {
+                std::cout << label << " CodeBlock"
+                          << " [0x" << std::hex << codeBlock.startOffset
+                          << ", 0x" << codeBlock.endOffset << std::dec << "):\n";
+
+                std::cout << "  Instructions:\n";
+                for (const auto* instr : codeBlock.instructions) {
+                    std::cout << "    " << instr->toString() << "\n";
+                }
+
+                std::cout << "  Constant Pool:\n";
+                for (const auto& entry : codeBlock.constantPool) {
+                    std::cout << "    Index: " << entry.first << ", Value: " << entry.second << "\n";
+                }
+            };
+
+            printCodeBlock("Global", globalCodeBlock);
+            for (const auto& [functionId, codeBlock] : functionCodeBlocks) {
+                const auto label = std::string("Function ") + std::to_string(functionId);
+                printCodeBlock(label.c_str(), codeBlock);
             }
             std::cout.flags(previousFlags);
     }

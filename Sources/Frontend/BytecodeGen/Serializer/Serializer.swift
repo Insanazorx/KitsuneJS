@@ -1,11 +1,15 @@
 class SerializationUnit {
     var globalBasicBlocks: [BasicBlock] = []
-    var functionTable: [Bytecode.FunctionID: [BasicBlock]] = [:]
-    var constantsPool: [String: UInt32] = [:]
+    var globalConstantsPool: ConstantsPool = ConstantsPool()
+    var functionTable: [Bytecode.FunctionID: CodeBlock] = [:]
+    
 }
 
 
 class Serializer {
+    static let globalCodeBlockID: UInt32 = UInt32.max
+    static let codeBlockConstantPoolMarker: [UInt8] = [0xC0, 0xDE, 0xB1, 0x0C]
+
     public var SerializedBytecode: [UInt8] = []
     
     var serializationUnit: SerializationUnit
@@ -14,7 +18,7 @@ class Serializer {
     var basicBlockOffsets: [UInt32] = [] // basic block starting offsets 
     var basicBlockIdToOffset: [Int: UInt32] = [:]
     var OffsetsToBackpatchInSerialization: [(offsetToBackpatch: UInt32, ref: Int)] = []
-    var functionIdToOffset: [Bytecode.FunctionID: Int] = [:] // Int stands for basic block index
+    var functionIdToOffset: [Bytecode.FunctionID: UInt32] = [:]
 
     init(serializationUnit: SerializationUnit) {
         self.serializationUnit = serializationUnit
@@ -44,8 +48,8 @@ extension Serializer {
         OffsetsToBackpatchInSerialization.append((offsetCounter, ref))
     }
 
-    func putFunctionIDRecord(functionId: Bytecode.FunctionID, blockIndex: Int) {
-        functionIdToOffset[functionId] = blockIndex
+    func putFunctionIDRecord(functionId: Bytecode.FunctionID, entryOffset: UInt32) {
+        functionIdToOffset[functionId] = entryOffset
     }
 
     func emitByte(_ byte: UInt8) {
@@ -131,13 +135,14 @@ extension Serializer {
     }
     
 
-    func emitConstantsPool() -> UInt32 {
-        let constantsPoolStartingOffset = offsetCounter
+    func emitConstantPoolRecord(codeBlockId: UInt32, constantsPool: ConstantsPool) {
+        emitBytes(Self.codeBlockConstantPoolMarker)
+        emitUInt32(codeBlockId)
         
-        let constantsCount = UInt32(serializationUnit.constantsPool.count)
+        let constantsCount = UInt32(constantsPool.pool.count)
         emitUInt32(constantsCount)
         
-        let sortedConstants = serializationUnit.constantsPool.sorted {
+        let sortedConstants = constantsPool.pool.sorted {
             if $0.value == $1.value {
                 return $0.key < $1.key
             }
@@ -148,6 +153,27 @@ extension Serializer {
             emitBytes([0xFA, 0xCE, 0xFA, 0xCE]) // A sequence of bytes that indicates the start of a constant pool entry
             serializeCPIndex(Bytecode.CPIndex(rawValue: index))
             emitString(constant)
+        }
+    }
+
+    func emitConstantsPool() -> UInt32 {
+        let constantsPoolStartingOffset = offsetCounter
+
+        let sortedFunctions = serializationUnit.functionTable.sorted {
+            $0.key.rawValue < $1.key.rawValue
+        }
+        emitUInt32(UInt32(sortedFunctions.count + 1))
+
+        emitConstantPoolRecord(
+            codeBlockId: Self.globalCodeBlockID,
+            constantsPool: serializationUnit.globalConstantsPool
+        )
+
+        for (functionId, codeBlock) in sortedFunctions {
+            emitConstantPoolRecord(
+                codeBlockId: functionId.rawValue,
+                constantsPool: codeBlock.constantPool
+            )
         }
 
         return constantsPoolStartingOffset
@@ -160,9 +186,9 @@ extension Serializer {
             $0.key.rawValue < $1.key.rawValue
         }
 
-        for (functionId, bbid) in sortedFunctionOffsets {
+        for (functionId, entryOffset) in sortedFunctionOffsets {
             emitUInt32(functionId.rawValue)
-            emitUInt32(UInt32(bbid))
+            emitUInt32(entryOffset)
         }
 
         return functionTableStartingOffset
@@ -185,9 +211,9 @@ extension Serializer {
             $0.key.rawValue < $1.key.rawValue
         }
 
-        for (functionId, blocks) in sortedFunctions {
-            putFunctionIDRecord(functionId: functionId, blockIndex: basicBlockOffsets.count)
-            for block in blocks {
+        for (functionId, codeBlock) in sortedFunctions {
+            putFunctionIDRecord(functionId: functionId, entryOffset: offsetCounter)
+            for block in codeBlock.basicBlocks {
                 putBasicBlockOffset(block: block)
                 serializeBasicBlock(block)
             }
@@ -1029,4 +1055,3 @@ extension Serializer {
         serializeCallSlot(slot)
     }
 }
-

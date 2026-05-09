@@ -58,6 +58,8 @@ extension Serializer {
                 return "MAGIC BYTES"
             case "FACEFACE":
                 return "MAGIC BYTES"
+            case "C0DEB10C":
+                return "CODEBLOCK CONSTANT POOL"
             case "DEADBEEF":
                 return "MAGIC BYTES"
             case "CAFEBABE":
@@ -467,17 +469,14 @@ extension Serializer {
             }
         }
 
-        func renderCodeSegment(start: Int, end: Int) {
-            lines.append("")
-            lines.append("[CODE SEGMENT / BASIC BLOCKS]")
-
+        func renderBasicBlocks(start: Int, end: Int, linePrefix: String) {
             guard start >= 0, start <= bytes.count else {
-                lines.append("\(offsetLabel(start))  <invalid code segment start>")
+                lines.append("\(linePrefix)\(offsetLabel(start)) <invalid code block start>")
                 return
             }
 
             guard end >= start, end <= bytes.count else {
-                lines.append("\(offsetLabel(end))  <invalid code segment end>")
+                lines.append("\(linePrefix)\(offsetLabel(end)) <invalid code block end>")
                 return
             }
 
@@ -493,14 +492,14 @@ extension Serializer {
 
             let blockOffsets: [Int]
             if sortedBlockOffsets.isEmpty && start < end {
-                lines.append("\(offsetLabel(start))  <missing basicBlockOffsets metadata; decoding code segment as BasicBlock #0>")
+                lines.append("\(linePrefix)\(offsetLabel(start)) <missing basicBlockOffsets metadata; decoding range as BasicBlock #0>")
                 blockOffsets = [start]
             } else {
                 blockOffsets = sortedBlockOffsets
             }
 
             guard !blockOffsets.isEmpty else {
-                lines.append("\(offsetLabel(start))  <empty code segment>")
+                lines.append("\(linePrefix)<empty>")
                 return
             }
 
@@ -512,13 +511,12 @@ extension Serializer {
                     blockEnd = end
                 }
 
-                lines.append("")
-                lines.append("\(offsetLabel(blockStart))  BasicBlock #\(blockIndex)")
+                lines.append("\(linePrefix)\(offsetLabel(blockStart)) BasicBlock #\(blockIndex)")
 
                 var pc = blockStart
                 while pc < blockEnd {
                     guard pc >= 0, pc < bytes.count else {
-                        lines.append("\(offsetLabel(pc))    <out of range>")
+                        lines.append("\(linePrefix)  \(offsetLabel(pc)) <out of range>")
                         break
                     }
 
@@ -529,10 +527,43 @@ extension Serializer {
                     let op = bytes.indices.contains(pc) ? opcodeName(bytes[pc]) : "<out of range>"
                     let annotation = bytes.indices.contains(pc) ? opcodeAnnotation(bytes[pc]) : ""
                     let truncated = length < expectedLength ? " <truncated expectedLen=\(expectedLength)>" : ""
-                    lines.append("\(offsetLabel(pc))    \(op)\(annotation) [len=\(length)] \(hexBytes(chunk))\(truncated)")
+                    lines.append("\(linePrefix)  \(offsetLabel(pc)) \(op)\(annotation) [len=\(length)] \(hexBytes(chunk))\(truncated)")
                     pc += length
                 }
             }
+        }
+
+        struct FunctionTableEntry {
+            let functionId: UInt32
+            let entryOffset: Int
+            let recordOffset: Int
+        }
+
+        struct ConstantEntry {
+            let index: UInt32
+            let value: String
+            let valueOffset: Int
+        }
+
+        func parseFunctionTableEntries(start: Int, end: Int) -> [FunctionTableEntry] {
+            guard start >= 0, end >= start, end <= bytes.count else {
+                return []
+            }
+
+            var entries: [FunctionTableEntry] = []
+            var pc = start
+            while pc + 8 <= end {
+                let functionId = readUInt32(at: pc) ?? 0
+                let entryOffset = readUInt32(at: pc + 4).map { Int($0) } ?? 0
+                entries.append(FunctionTableEntry(
+                    functionId: functionId,
+                    entryOffset: entryOffset,
+                    recordOffset: pc
+                ))
+                pc += 8
+            }
+
+            return entries
         }
 
         func renderFunctionTable(start: Int, end: Int) {
@@ -549,93 +580,147 @@ extension Serializer {
                 return
             }
 
-            var pc = start
-            var row = 0
-            while pc + 8 <= end {
-                let functionId = readUInt32(at: pc) ?? 0
-                let basicBlockIndex = readUInt32(at: pc + 4) ?? 0
-                lines.append("\(offsetLabel(pc))  entry #\(row): functionId=\(functionId), basicBlockIndex=\(basicBlockIndex), bytes=\(hexBytes(bytes[pc..<pc + 8]))")
-                pc += 8
-                row += 1
+            let entries = parseFunctionTableEntries(start: start, end: end)
+            for (row, entry) in entries.enumerated() {
+                lines.append("\(offsetLabel(entry.recordOffset))  entry #\(row): functionId=\(entry.functionId), entryOffset=\(offsetLabel(entry.entryOffset)), bytes=\(hexBytes(bytes[entry.recordOffset..<entry.recordOffset + 8]))")
             }
 
-            if row == 0 && pc == end {
+            let trailingOffset = start + entries.count * 8
+            if entries.isEmpty && trailingOffset == end {
                 lines.append("\(offsetLabel(start))  <empty function table>")
             }
 
-            if pc < end {
-                lines.append("\(offsetLabel(pc))  trailing bytes: \(hexBytes(bytes[pc..<end]))")
+            if trailingOffset < end {
+                lines.append("\(offsetLabel(trailingOffset))  trailing bytes: \(hexBytes(bytes[trailingOffset..<end]))")
             }
         }
 
-        func renderConstantsPool(start: Int, end: Int) {
-            lines.append("")
-            lines.append("[CONSTANT POOL]")
-
-            guard start >= 0, start <= bytes.count else {
-                lines.append("\(offsetLabel(start))  <invalid constant pool start>")
-                return
+        func parseConstantPools(start: Int, end: Int) -> [UInt32: [ConstantEntry]] {
+            guard start >= 0, end >= start, start + 4 <= end, end <= bytes.count else {
+                return [:]
             }
 
-            guard end >= start, end <= bytes.count else {
-                lines.append("\(offsetLabel(end))  <invalid constant pool end>")
-                return
-            }
-
-            guard start + 4 <= end else {
-                lines.append("\(offsetLabel(start))  <missing constants count>")
-                return
-            }
-
-            let count = readUInt32(at: start) ?? 0
-            lines.append("\(offsetLabel(start))  constantsCount=\(count), bytes=\(hexBytes(bytes[start..<start + 4]))")
-
+            let codeBlockPoolCount = readUInt32(at: start) ?? 0
+            var pools: [UInt32: [ConstantEntry]] = [:]
             var pc = start + 4
-            var entry = 0
-            while entry < Int(count), pc < end {
-                if pc + 4 <= end {
-                    let marker = Array(bytes[pc..<pc + 4])
-                    if let annotation = magicAnnotation(for: marker) {
-                        lines.append("\(offsetLabel(pc))  constant #\(entry) marker: \(hexBytes(marker)) => \(annotation)")
-                    } else {
-                        lines.append("\(offsetLabel(pc))  constant #\(entry) marker: \(hexBytes(marker)) <unexpected marker>")
-                    }
-                    pc += 4
-                } else {
-                    lines.append("\(offsetLabel(pc))  constant #\(entry) marker: <truncated>")
+
+            for _ in 0..<Int(codeBlockPoolCount) {
+                guard pc + 12 <= end else {
                     break
                 }
 
-                guard pc + 4 <= end else {
-                    lines.append("\(offsetLabel(pc))  constant #\(entry) cpIndex: <truncated>")
-                    break
-                }
-
-                let cpIndex = readUInt32(at: pc) ?? 0
-                lines.append("\(offsetLabel(pc))  constant #\(entry) cpIndex=\(cpIndex), bytes=\(hexBytes(bytes[pc..<pc + 4]))")
+                pc += 4 // CodeBlock constant-pool marker.
+                let codeBlockId = readUInt32(at: pc) ?? 0
                 pc += 4
 
-                let stringStart = pc
-                while pc < end && bytes[pc] != 0 {
-                    pc += 1
+                let constantsCount = readUInt32(at: pc) ?? 0
+                pc += 4
+
+                var entries: [ConstantEntry] = []
+                for _ in 0..<Int(constantsCount) {
+                    guard pc + 8 <= end else {
+                        break
+                    }
+
+                    pc += 4 // Constant entry marker.
+                    let cpIndex = readUInt32(at: pc) ?? 0
+                    pc += 4
+
+                    let stringStart = pc
+                    while pc < end && bytes[pc] != 0 {
+                        pc += 1
+                    }
+
+                    let stringBytes = bytes[stringStart..<pc]
+                    let constant = String(bytes: stringBytes, encoding: .utf8) ?? "<invalid utf8>"
+                    entries.append(ConstantEntry(
+                        index: cpIndex,
+                        value: constant,
+                        valueOffset: stringStart
+                    ))
+
+                    if pc < end && bytes[pc] == 0 {
+                        pc += 1
+                    }
                 }
 
-                let stringBytes = bytes[stringStart..<pc]
-                let constant = String(bytes: stringBytes, encoding: .utf8) ?? "<invalid utf8>"
-
-                if pc < end && bytes[pc] == 0 {
-                    let renderedBytes = hexBytes(bytes[stringStart...pc])
-                    lines.append("\(offsetLabel(stringStart))  constant #\(entry) value=\"\(escapedString(constant))\", bytes=\(renderedBytes)")
-                    pc += 1
-                } else {
-                    lines.append("\(offsetLabel(stringStart))  constant #\(entry) value=\"\(escapedString(constant))\", bytes=\(hexBytes(stringBytes)) <missing null terminator>")
-                }
-
-                entry += 1
+                pools[codeBlockId] = entries
             }
 
-            if pc < end {
-                lines.append("\(offsetLabel(pc))  trailing bytes: \(hexBytes(bytes[pc..<end]))")
+            return pools
+        }
+
+        func renderConstantPool(_ entries: [ConstantEntry], linePrefix: String) {
+            guard !entries.isEmpty else {
+                lines.append("\(linePrefix)<empty>")
+                return
+            }
+
+            for entry in entries.sorted(by: { $0.index < $1.index }) {
+                lines.append("\(linePrefix)cp[\(entry.index)] @ \(offsetLabel(entry.valueOffset)) = \"\(escapedString(entry.value))\"")
+            }
+        }
+
+        func renderCodeBlocks(
+            codeStart: Int,
+            codeEnd: Int,
+            functionEntries: [FunctionTableEntry],
+            constantPools: [UInt32: [ConstantEntry]]
+        ) {
+            lines.append("")
+            lines.append("[CODE BLOCKS]")
+
+            guard codeStart >= 0, codeEnd >= codeStart, codeEnd <= bytes.count else {
+                lines.append("\(offsetLabel(codeStart))  <invalid code block range>")
+                return
+            }
+
+            struct CodeBlockRenderInfo {
+                let name: String
+                let constantPoolId: UInt32
+                let start: Int
+                let end: Int
+            }
+
+            let validFunctionEntries = functionEntries
+                .filter { $0.entryOffset >= codeStart && $0.entryOffset <= codeEnd }
+                .sorted {
+                    if $0.entryOffset == $1.entryOffset {
+                        return $0.functionId < $1.functionId
+                    }
+                    return $0.entryOffset < $1.entryOffset
+                }
+
+            let globalEnd = validFunctionEntries.first?.entryOffset ?? codeEnd
+            var codeBlocks: [CodeBlockRenderInfo] = [
+                CodeBlockRenderInfo(
+                    name: "global",
+                    constantPoolId: UInt32.max,
+                    start: codeStart,
+                    end: globalEnd
+                )
+            ]
+
+            for (index, functionEntry) in validFunctionEntries.enumerated() {
+                let end = index + 1 < validFunctionEntries.count
+                    ? validFunctionEntries[index + 1].entryOffset
+                    : codeEnd
+
+                codeBlocks.append(CodeBlockRenderInfo(
+                    name: "function \(functionEntry.functionId)",
+                    constantPoolId: functionEntry.functionId,
+                    start: functionEntry.entryOffset,
+                    end: end
+                ))
+            }
+
+            for (index, codeBlock) in codeBlocks.enumerated() {
+                lines.append("")
+                lines.append("CODE BLOCK #\(index) (\(codeBlock.name)) [\(offsetLabel(codeBlock.start)), \(offsetLabel(codeBlock.end)))")
+                lines.append("|->[BasicBlocks]")
+                renderBasicBlocks(start: codeBlock.start, end: codeBlock.end, linePrefix: "|  ")
+                lines.append("|->[ConstantPool]")
+                renderConstantPool(constantPools[codeBlock.constantPoolId] ?? [], linePrefix: "|  ")
             }
         }
 
@@ -759,14 +844,6 @@ extension Serializer {
         renderOptionalSectionSeparator(at: separatorBeforeFunctionTable, name: "separator.beforeFunctionTable")
         renderOptionalSectionSeparator(at: separatorBeforeConstantsPool, name: "separator.beforeConstantPool")
 
-        if let basicBlocksOffset, let codeEnd = separatorBeforeFunctionTable {
-            renderCodeSegment(start: basicBlocksOffset, end: codeEnd)
-        } else {
-            lines.append("")
-            lines.append("[CODE SEGMENT / BASIC BLOCKS]")
-            lines.append("0x????????  <unavailable: missing section offsets>")
-        }
-
         if let functionTableOffset, let functionTableEnd = separatorBeforeConstantsPool {
             renderFunctionTable(start: functionTableOffset, end: functionTableEnd)
         } else {
@@ -775,12 +852,31 @@ extension Serializer {
             lines.append("0x????????  <unavailable: missing section offsets>")
         }
 
-        if let constantsPoolOffset {
-            renderConstantsPool(start: constantsPoolOffset, end: constantsPoolEnd)
+        let functionEntries: [FunctionTableEntry] = {
+            guard let functionTableOffset, let functionTableEnd = separatorBeforeConstantsPool else {
+                return []
+            }
+            return parseFunctionTableEntries(start: functionTableOffset, end: functionTableEnd)
+        }()
+
+        let constantPools: [UInt32: [ConstantEntry]] = {
+            guard let constantsPoolOffset else {
+                return [:]
+            }
+            return parseConstantPools(start: constantsPoolOffset, end: constantsPoolEnd)
+        }()
+
+        if let basicBlocksOffset, let codeEnd = separatorBeforeFunctionTable {
+            renderCodeBlocks(
+                codeStart: basicBlocksOffset,
+                codeEnd: codeEnd,
+                functionEntries: functionEntries,
+                constantPools: constantPools
+            )
         } else {
             lines.append("")
-            lines.append("[CONSTANT POOL]")
-            lines.append("0x????????  <unavailable: missing section offset>")
+            lines.append("[CODE BLOCKS]")
+            lines.append("0x????????  <unavailable: missing section offsets>")
         }
 
         return lines.joined(separator: "\n")

@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,7 @@
 
 #include "Bytecodes.h"
 #include "Instruction.h"
+#include "../Runtime/CodeBlock.h"
 
 namespace JSBackend::Bytecode {
 
@@ -26,6 +28,8 @@ namespace JSBackend::Bytecode {
         std::vector<Interpreter::Instruction*> instructions;
         std::unordered_map<FunctionID, uint32_t> functionTable;
         std::unordered_map<CPIndex, std::string> constantPool;
+        Runtime::CodeBlock globalCodeBlock;
+        std::unordered_map<FunctionID, Runtime::CodeBlock> functionCodeBlocks;
 
         void print() const;
     };
@@ -44,6 +48,8 @@ namespace JSBackend::Bytecode {
 #undef DEFINE_DECODER
 
         static constexpr size_t SectionSeparatorSize = 16;
+        static constexpr std::array<uint8_t, 4> CodeBlockConstantPoolMarker = {0xC0, 0xDE, 0xB1, 0x0C};
+        static constexpr std::array<uint8_t, 4> ConstantPoolEntryMarker = {0xFA, 0xCE, 0xFA, 0xCE};
 
         template <typename T>
         struct IsOptional : std::false_type {};
@@ -140,7 +146,9 @@ namespace JSBackend::Bytecode {
 
         void decodeFunctionTable();
 
-        void decodeConstantPool();
+        void decodeConstantPools();
+
+        void buildCodeBlocks();
 
         void verifyHeader();
 
@@ -151,12 +159,25 @@ namespace JSBackend::Bytecode {
         }
 
         void putFunctionTableEntry(FunctionID id, uint32_t offset) {
-            m_result.functionTable.emplace(id, offset);
+            if (!m_result.functionTable.emplace(id, offset).second) {
+                throw std::runtime_error("Invalid bytecode: duplicate function table entry for id " + std::to_string(id));
+            }
 
+            auto& codeBlock = m_result.functionCodeBlocks[id];
+            codeBlock.id = id;
+            codeBlock.startOffset = offset;
         }
 
-        void putConstantPoolEntry(CPIndex index, std::string value) {
-            m_result.constantPool.emplace(index, std::move(value));
+        void putConstantPoolEntry(uint32_t codeBlockId, CPIndex index, std::string value) {
+            if (codeBlockId == Runtime::CodeBlock::GlobalCodeBlockID) {
+                m_result.globalCodeBlock.constantPool.emplace(index, value);
+                m_result.constantPool.emplace(index, std::move(value));
+                return;
+            }
+
+            auto& codeBlock = m_result.functionCodeBlocks[codeBlockId];
+            codeBlock.id = codeBlockId;
+            codeBlock.constantPool.emplace(index, std::move(value));
         }
 
         std::vector<uint8_t> readBytes(size_t count) {

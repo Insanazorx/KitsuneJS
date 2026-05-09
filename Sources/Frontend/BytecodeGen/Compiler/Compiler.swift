@@ -3,8 +3,9 @@ class BytecodeCompiler {
     var compilationUnit: CompilationUnit
     var serializationUnit: SerializationUnit
     
-    var constantsPool: [String: UInt32] = [:]
-    var functionTable: [Bytecode.FunctionID: [BasicBlock]] = [:]
+    var GlobalConstantsPool: ConstantsPool = ConstantsPool()
+    var currentConstantsPool: ConstantsPool
+    var functionTable: [Bytecode.FunctionID: CodeBlock] = [:]
     var GlobalBasicBlocks: [BasicBlock] = []
     
     var currentBlock: BasicBlock 
@@ -29,6 +30,7 @@ class BytecodeCompiler {
         self.serializationUnit = serializationUnit
         self.currentBlock = BasicBlock(id: 0)
         self.GlobalBasicBlocks.append(self.currentBlock)
+        self.currentConstantsPool = self.GlobalConstantsPool
     }
 }
 
@@ -38,13 +40,19 @@ extension BytecodeCompiler {
         #if DEBUG
         #endif
     }
+
+    func switchConstantsPool(_ pool: ConstantsPool) -> ConstantsPool {
+        let oldCP = self.currentConstantsPool
+        self.currentConstantsPool = pool
+        return oldCP
+    }
     
     func putRecordOnConstantsPool(_ value: String) -> (UInt32, Bool) {
-        if let existingIndex = constantsPool[value] {
+        if let existingIndex = currentConstantsPool.pool[value] {
             return (existingIndex, true)
         } else {
-            let newIndex = UInt32(constantsPool.count)
-            constantsPool[value] = newIndex
+            let newIndex = UInt32(currentConstantsPool.pool.count)
+            currentConstantsPool.pool[value] = newIndex
             return (newIndex, false)
         }
     }
@@ -64,25 +72,29 @@ extension BytecodeCompiler {
                 fatalError("Current function ID should have been put in the function table")
             }
 
-            functionTable[currentId]!.append(entryBlock)
+            functionTable[currentId]!.addBasicBlock(entryBlock)
         } else {
             GlobalBasicBlocks.append(entryBlock)
         }
     }
 
-    func enterFunctionBBContext(funcId: Bytecode.FunctionID) -> BasicBlock {
+    func enterFunctionBBContext(funcId: Bytecode.FunctionID) -> (BasicBlock, ConstantsPool) {
         let newBlock = allocBasicBlock()
+        let constantsPool = ConstantsPool()
+        let codeBlock = CodeBlock(constantPool: constantsPool)
+        codeBlock.addBasicBlock(newBlock)
         
         pushVirtualCallStack(funcId)
-        functionTable[funcId] = [newBlock]
+        functionTable[funcId] = codeBlock
 
-        return switchBasicBlock(newBlock)
+        return (switchBasicBlock(newBlock), switchConstantsPool(constantsPool))
          
     }
 
-    func exitFunctionBBContext(oldBlock: BasicBlock) {
+    func exitFunctionBBContext(oldBlock: BasicBlock, oldCP: ConstantsPool) {
         popVirtualCallStack()
         _ = switchBasicBlock(oldBlock)
+        _ = switchConstantsPool(oldCP)
     }
 
     func allocNodeId() -> Int {
@@ -110,11 +122,11 @@ extension BytecodeCompiler {
     }
 
     func emitOnFunctionLevel(_ bytecode: Bytecode, funcId: Bytecode.FunctionID, at index: Int = 1) {
-        guard let blocks = functionTable[funcId] else {
+        guard let codeBlock = functionTable[funcId] else {
             fatalError("Function ID should have been put in the function table")
         }
 
-        guard let firstBlock = blocks.first else {
+        guard let firstBlock = codeBlock.basicBlocks.first else {
             fatalError("There should be at least one block for the function")
         }
 
@@ -1100,16 +1112,16 @@ extension BytecodeCompiler {
             ), at: 3) // same as above
         }
                 
+        let (oldBlock, oldCP) = enterFunctionBBContext(funcId: funcId)
+        
+        emit(.enterFunction)
+        emit(.pushLexicalEnvironment(environment: envReg))
+
         let paramInfos: [BytecodeCompiler.PatternBindingPlan] = if let parameters = params {
             parameters.map { walkPattern($0) }
         } else {
             []
         }
-        
-        let oldBlock = enterFunctionBBContext(funcId: funcId)
-        
-        emit(.enterFunction)
-        emit(.pushLexicalEnvironment(environment: envReg))
         
         if !paramInfos.isEmpty {
             paramInfos.forEach {
@@ -1137,7 +1149,7 @@ extension BytecodeCompiler {
         emit(.popLexicalEnvironment)
         emitTerminator(.return(nil))
         
-        exitFunctionBBContext(oldBlock: oldBlock)
+        exitFunctionBBContext(oldBlock: oldBlock, oldCP: oldCP)
         resetArgumentSlots()
 
     }
@@ -1348,7 +1360,7 @@ extension BytecodeCompiler {
 
 extension BytecodeCompiler {
     func exportSerializationUnit() -> SerializationUnit {
-        serializationUnit.constantsPool = constantsPool
+        serializationUnit.globalConstantsPool = GlobalConstantsPool
         serializationUnit.functionTable = functionTable
         serializationUnit.globalBasicBlocks = GlobalBasicBlocks
         return serializationUnit
@@ -1365,20 +1377,14 @@ extension BytecodeCompiler: CustomStringConvertible {
         for block in GlobalBasicBlocks {
             result += "\(block)\n"
         }
+
+        result += "=== Global Constants Pool ===\n"
+        result += "\(GlobalConstantsPool)\n"
         
         result += "=== Function Table ===\n"
-        for (funcId, blocks) in functionTable {
+        for (funcId, codeBlock) in functionTable {
             result += "Function ID: \(funcId)\n"
-            for block in blocks {
-                result += "\(block)\n"
-            }
-        }
-
-        
-        result += "=== Constants Pool ===\n"
-        
-        constantsPool.forEach { (value, index) in
-            result += "Index: \(index), Value: \(value)\n"
+            result += "\(codeBlock)\n"
         }
         
         return result

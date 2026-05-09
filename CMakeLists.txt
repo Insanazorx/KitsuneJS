@@ -19,6 +19,7 @@ set(JSBACKEND_PUBLIC_HEADERS
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Interpreter.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Instruction.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
+        ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/CodeBlock.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/JSValue.h
         Sources/Backend/VM/Bytecodes/Decoder.h
         Sources/Backend/VM/Bytecodes/Decoder.cpp
@@ -31,9 +32,12 @@ set(JSBACKEND_PUBLIC_HEADERS
         Sources/Backend/VM/Runtime/GlobalObject.h
         Sources/Backend/VM/Runtime/Environment.h
         Sources/Backend/VM/Runtime/CallFrame.h
+        Sources/Backend/VM/Runtime/CodeBlock.h
         Sources/Backend/VM/Runtime/JSFunction.h
         Sources/Backend/VM/Runtime/Structure.h
         Sources/Backend/VM/Runtime/Butterfly.h
+        Sources/Backend/VM/VM.h
+        Sources/Backend/VM/Runtime/PropertyKey.h
 )
 
 set(JSBACKEND_IDE_ONLY_SOURCES
@@ -52,6 +56,7 @@ add_library(JSBackendCABI SHARED
     ${JSBACKEND_PUBLIC_HEADERS}
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Instruction.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
+        ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/CodeBlock.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/JSValue.h
         Sources/Backend/VM/Bytecodes/Decoder.h
         Sources/Backend/VM/Bytecodes/Decoder.cpp
@@ -64,9 +69,12 @@ add_library(JSBackendCABI SHARED
         Sources/Backend/VM/Runtime/GlobalObject.h
         Sources/Backend/VM/Runtime/Environment.h
         Sources/Backend/VM/Runtime/CallFrame.h
+        Sources/Backend/VM/Runtime/CodeBlock.h
         Sources/Backend/VM/Runtime/JSFunction.h
         Sources/Backend/VM/Runtime/Structure.h
         Sources/Backend/VM/Runtime/Butterfly.h
+        Sources/Backend/VM/VM.h
+        Sources/Backend/VM/Runtime/PropertyKey.h
 )
 
 target_compile_definitions(JSBackendCABI PRIVATE JSBACKEND_BUILDING_DLL)
@@ -110,6 +118,8 @@ add_executable(RunSwift ${JSBACKEND_SOURCE_ROOT}/Tools/RunSwift.cpp
         Sources/Backend/VM/Runtime/JSFunction.h
         Sources/Backend/VM/Runtime/Structure.h
         Sources/Backend/VM/Runtime/Butterfly.h
+        Sources/Backend/VM/VM.h
+        Sources/Backend/VM/Runtime/PropertyKey.h
 )
 add_dependencies(RunSwift BuildSwiftFrontend)
 target_compile_definitions(RunSwift
@@ -123,6 +133,7 @@ add_executable(CLionMainConf ${JSBACKEND_SOURCE_ROOT}/Tools/CLionMainConf.cpp
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Instruction.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/JSValue.h
+        ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/CodeBlock.h
         Sources/Backend/VM/Bytecodes/Decoder.h
         Sources/Backend/VM/Bytecodes/Decoder.cpp
         Sources/Backend/VM/GC/JSCell.h
@@ -134,9 +145,12 @@ add_executable(CLionMainConf ${JSBACKEND_SOURCE_ROOT}/Tools/CLionMainConf.cpp
         Sources/Backend/VM/Runtime/GlobalObject.h
         Sources/Backend/VM/Runtime/Environment.h
         Sources/Backend/VM/Runtime/CallFrame.h
+        Sources/Backend/VM/Runtime/CodeBlock.h
         Sources/Backend/VM/Runtime/JSFunction.h
         Sources/Backend/VM/Runtime/Structure.h
         Sources/Backend/VM/Runtime/Butterfly.h
+        Sources/Backend/VM/VM.h
+        Sources/Backend/VM/Runtime/PropertyKey.h
 )
 target_sources(CLionMainConf PRIVATE ${JSBACKEND_IDE_ONLY_SOURCES})
 target_link_libraries(CLionMainConf PRIVATE JSBackendCABI)

@@ -3,7 +3,7 @@
 namespace JSBackend::Interpreter {
 
     void Interpreter::run() {
-        for (auto& inst : m_instructions) {
+        for (auto& inst : m_globalCodeBlock.instructions) {
             switch (inst->OpType()) {
             #define HANDLE_BYTECODE(Name, Operands) case Bytecode::Op::Name: execute_##Name(dynamic_cast<Name##Instruction*>(inst)); break;
                 BC_ALL(HANDLE_BYTECODE)
@@ -24,7 +24,9 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(debugDumpIC) {}
     DECLARE_HANDLER(unreachable) {}
     DECLARE_HANDLER(halt) {}
-    DECLARE_HANDLER(enterGlobal) {}
+    DECLARE_HANDLER(enterGlobal) {
+
+    }
     DECLARE_HANDLER(enterFunction) {}
     DECLARE_HANDLER(move) {}
     DECLARE_HANDLER(clearReg) {}
