@@ -131,19 +131,20 @@ public struct WalkerImpl<Walker: NodeWalker> {
     } 
 
     mutating func walkMemberProperty(_ property: Expression) {
-    let pid = allocNodeId()
-
         switch property {
-        case .identifier(let name):
-            // obj.a  -> "a" property key'dir, lexical ref değildir
-            walkIdentifier(nodeId: pid, name: name)
-
-        case .privateIdentifier(let name):
-            // #x gibi isimleri de ref yapmadan sadece gez
-            walkIdentifier(nodeId: pid, name: name)
+        case .identifier, .privateIdentifier:
+            let pid = allocNodeId()
+            let shouldContinue = walker.preExpr(nodeId: pid, node: property)
+            if !shouldContinue {
+                walker.postExpr(nodeId: pid, node: property)
+                return
+            }
+            // obj.a / obj.#a property names are not lexical references, but the
+            // compiler still allocates an expression node id for them as keys.
+            walker.handlePrimary(nodeId: pid, node: property)
+            walker.postExpr(nodeId: pid, node: property)
 
         default:
-            // Beklenmedik bir şekil varsa yine de walk et
             walkExpression(property)
         }
     }
@@ -295,22 +296,12 @@ public struct WalkerImpl<Walker: NodeWalker> {
     }
 
     mutating func walkForInit(_ init: ForInit){
-        let fid = allocNodeId()
-        
-        let shouldContinue = walker.preForInit(nodeId: fid, node: `init`)
-        if !shouldContinue {
-            walker.postForInit(nodeId: fid, node: `init`)
-            return
-        }
-        
         switch `init` {
         case .declaration(let decl):
             walkDeclaration(decl)
         case .expression(let expr):
             walkExpression(expr)
         }
-
-        walker.postForInit(nodeId: fid, node: `init`)
     }
 
     mutating func walkForEachLeft(_ left: ForEachLeft) {

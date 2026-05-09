@@ -90,7 +90,10 @@ extension ScopeBuilder {
     }
 
     private func AddToScope(nodeId: Int) {
-        compilationUnit.nodeIdToScopeId.append(scopestack.last?.id ?? -1) //TODO: handle this case properly
+        while compilationUnit.nodeIdToScopeId.count <= nodeId {
+            compilationUnit.nodeIdToScopeId.append(-1)
+        }
+        compilationUnit.nodeIdToScopeId[nodeId] = scopestack.last?.id ?? -1
     }
 }
 
@@ -404,4 +407,3 @@ extension ScopeBuilder: NodeWalker {
     }
 
 }
-

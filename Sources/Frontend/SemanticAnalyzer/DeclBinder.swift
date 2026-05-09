@@ -10,6 +10,13 @@ public enum BindingKind: Equatable {
     case none
 }
 
+private func isLexical(_ kind: BindingKind) -> Bool {
+    if case .lexical = kind {
+        return true
+    }
+    return false
+}
+
 public struct Binding {
     var kind: BindingKind
     var name: String
@@ -109,8 +116,8 @@ extension DeclBinder: NodeWalker {
         let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
 
         let mutable = kind == .variable || (kind == .lexical(isConst: false))
-        let has_tdz = kind == .class || (kind == .lexical(isConst: true))
-        let is_hoisted = kind == .variable
+        let has_tdz = kind == .class || isLexical(kind)
+        let is_hoisted = kind == .variable || kind == .function
         let is_global = scopeId == 0 // global scope has id 0, but we will need to update this later for cases like global eval or global indirect eval where new bindings can be added to the global scope after the initial creation of the global scope.
 
 
@@ -153,8 +160,8 @@ extension DeclBinder: NodeWalker {
         let scopeId = compilationUnit.getScopeIdByNodeId(nodeId: nodeId)
 
         let mutable = kind == .variable || (kind == .lexical(isConst: false))
-        let has_tdz = kind == .class || (kind == .lexical(isConst: true))
-        let is_hoisted = kind == .variable
+        let has_tdz = kind == .class || isLexical(kind)
+        let is_hoisted = kind == .variable || kind == .function
         let is_global = scopeId == 0 // global scope has id 0, but we will need to update this later for cases like global eval or global indirect eval where new bindings can be added to the global scope after the initial creation of the global scope.
 
         let binding = Binding(
@@ -194,15 +201,9 @@ extension DeclBinder: NodeWalker {
     }
     public func postDecl(nodeId: Int, node: Declaration) {
         switch node {
-            case .lexical:
-                fallthrough
-            case .variable:
-                fallthrough
-            case .importDecl:
-                fallthrough // import declarations don't create bindings in the current scope, so no need to exit context
-            case .exportDecl:
+            case .function, .class, .lexical, .variable:
                 exitContext()
-            default:
+            case .importDecl, .exportDecl:
                 break
         }
     }

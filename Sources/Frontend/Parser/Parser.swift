@@ -201,8 +201,8 @@ extension Parser {
         case .dot, .leftBracket, .leftParen:
             return (20, 21)
 
-// Unary operators: new, instanceof
-        case .new, .binaryOp(.instanceof):
+        // Relational keyword operator.
+        case .binaryOp(.instanceof):
             return (19, 20)
             
         // Postfix update (can also be prefix in your nud/unary parser)
@@ -267,19 +267,24 @@ extension Parser {
 extension Parser : ParserCore {
 
     func putErrorOutput(_ index: Int) -> String {
+        if tokens.isEmpty {
+            return "Error at token index \(index). Token stream is empty."
+        }
+
         var output = "Error at token index \(index). Current token stream:\n"
 
         var line1 = ""
         var line2 = ""
 
-        let start = max(0, index - 5)
-        let end   = min(tokens.count - 1, index + 5)
+        let highlightedIndex = min(max(index, 0), tokens.count - 1)
+        let start = max(0, highlightedIndex - 5)
+        let end   = min(tokens.count - 1, highlightedIndex + 5)
 
         for i in start...end {
             let text = tokens[i].lexemeAndSpace
             line1 += text + " "
 
-            if i == index {
+            if i == highlightedIndex {
                 line2 += String(repeating: "~", count: text.count - 1) + "  "
             } else {
                 line2 += String(repeating: " ", count: text.count) + " "
@@ -328,10 +333,12 @@ extension Parser : ParserCore {
 
         var stmts: [Statement] = [];
 
-            while let stmt = try parseStatement() {
+            while currentToken() != nil {
+                guard let stmt = try parseStatement() else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
                 stmts.append(stmt);
-                if currentToken() == nil {break} 
-            }        
+            }
                     
         let program = Program.program(body: stmts);
 
@@ -460,7 +467,7 @@ extension Parser : ParserCore {
                     continue
 
                 default:
-                    fatalError("Unexpected operator token in parseExpression: \(opToken)")
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
             }
         }
         return lhs;
@@ -836,6 +843,10 @@ extension Parser : Parsers {
                         tempIndex += 1
                     }
 
+                    guard tempIndex < tokens.count else {
+                        return false
+                    }
+
                     if case .arrow = tokens[tempIndex].tokenType {
                         return true
                     }
@@ -941,6 +952,7 @@ extension Parser : Parsers {
                 if case .identifier(let name) = currentToken()?.tokenType {
                     
                     if case .arrow = peekToken(aheadBy: 1)?.tokenType {
+                        advance() // consume identifier before entering arrow function parsing
                     
                         return try parseArrowFunction(
                             isAsync: true,
@@ -973,6 +985,10 @@ extension Parser : Parsers {
                     
                 }
                 
+                guard currentToken()?.tokenType == .function else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+
                 guard let expr = try parseFunctionExpression(isAsync: true) else {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                 }
@@ -980,7 +996,7 @@ extension Parser : Parsers {
                 return expr;
 
         default:
-            fatalError("Unexpected token in nud expression: id: \(currentTokenIndex) \(String(describing: currentToken()))")
+            throw ParserError.unexpectedToken(putErrorOutput(currentTokenIndex))
         }
     }
 
@@ -1061,6 +1077,9 @@ extension Parser : Parsers {
             op = .unaryOp(unaryOp)
         }else if case .updateOp (let updateOp) = currentToken()?.tokenType {
             op = .updateOp(updateOp)
+        }else if case .binaryOp(let binaryOp) = currentToken()?.tokenType,
+                 binaryOp == .plus || binaryOp == .minus {
+            op = .binaryOp(binaryOp)
         }else {
             throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
         }
@@ -1795,9 +1814,8 @@ extension Parser : Parsers {
                     default:
                         throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
                 }
-            //TODO:
-            //case .ellipsis:
-            //  return try parseSpreadProperty()
+            case .spread:
+                return try parseSpreadProperty()
             default:
                 throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
         }
@@ -1996,29 +2014,53 @@ extension Parser : Parsers {
     // Statements
     func parseAsyncStatement() throws -> Statement? {
         advance() // consume 'async' keyword
-        
-        if let stmt = try parseStatement(isAsync: true) {
-            switch stmt {
-                case Statement.declarationStatement(let funcDecl):
-                    guard case .function = funcDecl else {
-                        throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-                    }
-                    return .declarationStatement(funcDecl)
 
-                case Statement.expressionStatement(let expr):
-                    if case .arrowFunction = expr {
-                        return .expressionStatement(expr)
-                    } else if case .functionExpression = expr {
-                        return .expressionStatement(expr)
-                    }
-
-                    return .expressionStatement(expr)
-                default:
+        switch currentToken()?.tokenType {
+            case .function:
+                guard let decl = try parseFunctionDeclaration(isAsync: true) else {
                     throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
-            }
-        }
+                }
+                return .declarationStatement(decl)
 
-        return nil // TODO: implement for identifier
+            case .identifier(let name) where peekToken(aheadBy: 1)?.tokenType == .arrow:
+                advance() // consume identifier
+                guard let expr = try parseArrowFunction(
+                    isAsync: true,
+                    Args: [.bindingIdentifier(name)]
+                ) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                try consumeSemicolon()
+                return .expressionStatement(expr)
+
+            case .leftParen:
+                advance() // consume '('
+                var patterns: [Pattern] = []
+                while currentToken()?.tokenType != .rightParen {
+                    guard currentToken() != nil else {
+                        throw ParserError.endOfInput
+                    }
+
+                    if let param = try parsePattern() {
+                        patterns.append(param)
+                    }
+
+                    if case .comma = currentToken()?.tokenType {
+                        advance() // consume ','
+                        continue
+                    }
+                }
+
+                try expect(tokenType: .rightParen)
+                guard let expr = try parseArrowFunction(isAsync: true, Args: patterns) else {
+                    throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+                }
+                try consumeSemicolon()
+                return .expressionStatement(expr)
+
+            default:
+                throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+        }
     }
 
     func parseBlockStatement() throws -> Statement? {
@@ -2218,11 +2260,11 @@ extension Parser : Parsers {
     }
     
     func parseImportDeclaration() throws -> Declaration? {
-        return nil
+        throw ParserError.invalidSyntax("import declarations are not implemented yet")
     }
     
     func parseExportDeclaration() throws -> Declaration? {
-        return nil
+        throw ParserError.invalidSyntax("export declarations are not implemented yet")
     }
     
     func parseClassDeclaration() throws -> Declaration? {
@@ -2268,9 +2310,6 @@ extension Parser : Parsers {
             if let element = try parseClassElement() {
                 bodyElements.append(element)
             } 
-
-            try consumeSemicolon()
-
         }
 
         try expect(tokenType: .rightBrace) // consume '}'
@@ -2386,22 +2425,26 @@ extension Parser : Parsers {
         }
 
         let parseInitPart = { () throws -> ForInit? in
-                    if case .semicolon = self.currentToken()?.tokenType {
-                        return nil // for(;;) case
+            switch self.currentToken()?.tokenType {
+                case .semicolon:
+                    return nil // for(;;) case
+                case .var:
+                    guard let decl = try self.parseVariableDeclaration(isInitAllowed: true) else {
+                        throw ParserError.invalidSyntax(self.putErrorOutput(self.currentTokenIndex))
                     }
-                    if let decl = try self.parseVariableDeclaration(isInitAllowed: true) {
-                        return .declaration(decl)
+                    return .declaration(decl)
+                case .let, .const:
+                    guard let decl = try self.parseLexicalDeclaration(isInitAllowed: true) else {
+                        throw ParserError.invalidSyntax(self.putErrorOutput(self.currentTokenIndex))
                     }
-
-                    if let decl = try self.parseLexicalDeclaration(isInitAllowed: true) {
-                        return .declaration(decl)
+                    return .declaration(decl)
+                default:
+                    guard let expr = try self.parseExpression(precedence: 0, allowComma: false) else {
+                        throw ParserError.invalidSyntax(self.putErrorOutput(self.currentTokenIndex))
                     }
-
-                    if let expr = try self.parseExpression(precedence: 0, allowComma: false) {
-                        return .expression(expr)
-                    }
-                    return nil
-                }
+                    return .expression(expr)
+            }
+        }
 
         enum ForClassicOrInOrOf {
             case forClassic
@@ -2409,49 +2452,44 @@ extension Parser : Parsers {
             case forOf
         }
 
-        let simulateNestingLevel: ForClassicOrInOrOf = { parser in 
+        let simulateNestingLevel: ForClassicOrInOrOf = try { parser in
             var ParenNestingLevel: Int = 0
             var BracketNestingLevel: Int = 0
             var BraceNestingLevel: Int = 0
             
-            var virtualIndexState = parser.currentTokenIndex
-            let currentIdx = parser.currentTokenIndex
-                while parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType != .of && parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType != .binaryOp(.in) {
-                    virtualIndexState += 1
+            var offset = 0
+            while let tokenType = parser.peekToken(aheadBy: offset)?.tokenType {
+                let isTopLevel = ParenNestingLevel == 0 && BracketNestingLevel == 0 && BraceNestingLevel == 0
 
-                    switch parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType {
-                        case .leftParen:
-                            ParenNestingLevel += 1
-                        case .rightParen:
-                            ParenNestingLevel -= 1
-                        case .leftBracket:
-                            BracketNestingLevel += 1
-                        case .rightBracket:
-                            BracketNestingLevel -= 1
-                        case .leftBrace:
-                            BraceNestingLevel += 1
-                        case .rightBrace:
-                            BraceNestingLevel -= 1
-                        default:
-                            break
-                    }
-                    if ParenNestingLevel == 0 && BracketNestingLevel == 0 && BraceNestingLevel == 0 {
-                        virtualIndexState += 1 
-                        switch parser.peekToken(aheadBy: virtualIndexState - currentIdx)?.tokenType {
-                            case .of:
-                                return .forOf
-                            case .binaryOp(.in):
-                                return .forIn
-                            case .semicolon:
-                                return .forClassic
-                            default:
-                                break;
-                        }
-                    }
-                    
-
+                switch tokenType {
+                    case .semicolon where isTopLevel:
+                        return .forClassic
+                    case .of where isTopLevel:
+                        return .forOf
+                    case .binaryOp(.in) where isTopLevel:
+                        return .forIn
+                    case .rightParen where isTopLevel:
+                        return .forClassic
+                    case .leftParen:
+                        ParenNestingLevel += 1
+                    case .rightParen:
+                        ParenNestingLevel -= 1
+                    case .leftBracket:
+                        BracketNestingLevel += 1
+                    case .rightBracket:
+                        BracketNestingLevel -= 1
+                    case .leftBrace:
+                        BraceNestingLevel += 1
+                    case .rightBrace:
+                        BraceNestingLevel -= 1
+                    default:
+                        break
                 }
-                fatalError("Should not reach here")
+
+                offset += 1
+            }
+
+            throw ParserError.endOfInput
             }(self)
 
         
@@ -2474,7 +2512,7 @@ extension Parser : Parsers {
                 if case .semicolon = currentToken()?.tokenType {
                     initPart = nil
                 } else {
-                    initPart = try parseInitPart()!
+                    initPart = try parseInitPart()
                 }
                 
                 try expect(tokenType: .semicolon)
@@ -2500,13 +2538,13 @@ extension Parser : Parsers {
                 }
 
                 return Statement.forStatement(
-                    init: initPart!,
+                    init: initPart,
                     test: testExpr,
                     update: updateExpr,
                     body: bodyStmt
                 )
             }
-        fatalError("Should not reach here")
+        throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
 
     }
 
@@ -2575,7 +2613,7 @@ extension Parser : Parsers {
                         return .target(target)
                     }
             }
-            fatalError ("Should not reach here since leftPartParser is only called when current token can start a pattern or declaration")
+            throw ParserError.invalidSyntax(parser.putErrorOutput(parser.currentTokenIndex))
         }
 
         let leftPart = try leftPartParser(self)
@@ -2603,6 +2641,14 @@ extension Parser : Parsers {
         
         advance() // consume 'return' keyword
 
+        if currentToken() == nil ||
+            currentToken()?.tokenType == .semicolon ||
+            currentToken()?.tokenType == .rightBrace ||
+            currentToken()?.isPreceededByLineTerminator == true {
+            try consumeSemicolon()
+            return .returnStatement(argument: nil)
+        }
+
         if let expr = try parseExpression(precedence: 0) {
             try consumeSemicolon();
             return .returnStatement(argument: expr)
@@ -2614,7 +2660,8 @@ extension Parser : Parsers {
     func parseBreakStatement() throws -> Statement? {
         advance() // consume 'break' keyword
         
-        if case .identifier (let name) = currentToken()?.tokenType {
+        if currentToken()?.isPreceededByLineTerminator != true,
+           case .identifier (let name) = currentToken()?.tokenType {
             let label = Expression.identifier(name)
             
             advance()
@@ -2629,7 +2676,8 @@ extension Parser : Parsers {
 
     func parseContinueStatement() throws -> Statement? {
         advance()
-        if case .identifier (let name) = currentToken()?.tokenType {
+        if currentToken()?.isPreceededByLineTerminator != true,
+           case .identifier (let name) = currentToken()?.tokenType {
             let label = Expression.identifier(name)
 
             advance()
@@ -2644,6 +2692,10 @@ extension Parser : Parsers {
 
     func parseThrowStatement() throws -> Statement? {
         advance() // consume 'throw' keyword
+        if currentToken() == nil || currentToken()?.isPreceededByLineTerminator == true {
+            throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
+        }
+
         guard let expr = try parseExpression(precedence: 0) else {
             throw ParserError.invalidSyntax(putErrorOutput(currentTokenIndex))
         }
@@ -2717,7 +2769,7 @@ extension Parser : Parsers {
         )
     }
     func parseSwitchStatement() throws -> Statement? {
-        return nil
+        throw ParserError.invalidSyntax("switch statements are not implemented yet")
     }
     func parseLabelledStatement() throws -> Statement? {
         guard case .identifier (let labelName) = currentToken()?.tokenType else {
@@ -2898,10 +2950,6 @@ extension Parser : Parsers {
         return .rest(argumentPattern)
     }
 }
-
-
-
-
 
 
 

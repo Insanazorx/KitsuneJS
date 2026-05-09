@@ -11,7 +11,7 @@ public class CompilationUnit {
     public var boundRefCache: BoundRef? = nil
 
     public var nodeIdToScopeId: [Int] = []
-    public var nodeIdToNode: [AnyNode] = []
+    public var nodeIdToNode: [Int: AnyNode] = [:]
     public var descs: [String] = []
     
 
@@ -262,4 +262,3 @@ extension BoundRef {
         ])
     }
     }
-

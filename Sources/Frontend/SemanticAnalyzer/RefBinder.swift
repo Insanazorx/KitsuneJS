@@ -38,6 +38,9 @@ public class RefBinder {
     var compilationUnit: CompilationUnit
 
     var refContextStack: [RefKind] = []
+    private var assignmentTargetContextPushedStack: [Bool] = []
+    private var assignmentTargetKindStack: [RefKind] = []
+    private var forEachLeftContextPushedStack: [Bool] = []
     private var currentBindingId: Int = 0
 
     public init(_ compilationUnit: CompilationUnit) {
@@ -132,8 +135,13 @@ extension RefBinder: NodeWalker {
         case .privateIdentifier(let name):
             handleIdentifier(nodeId: nodeId, name: name, isDecl: false)
         
-        case .assignment:
+        case .assignment(_, let op, _):
             enterContext(kind: .Read)
+            if op == .binaryOp(.assign) {
+                assignmentTargetKindStack.append(.Write)
+            } else {
+                assignmentTargetKindStack.append(.ReadWrite)
+            }
             
         
         case .binary (_, let op, _)
@@ -165,7 +173,10 @@ extension RefBinder: NodeWalker {
         switch node {
                 
             case .assignment:
-                fallthrough
+                if !assignmentTargetKindStack.isEmpty {
+                    assignmentTargetKindStack.removeLast()
+                }
+                exitContext()
             case .binary:
                 exitContext()
             case .binary (_, let op, _)
@@ -190,20 +201,29 @@ extension RefBinder: NodeWalker {
     public func preForEachLeft(nodeId: Int, node: ForEachLeft) -> Bool {
         switch node {
             case .declaration:
+                forEachLeftContextPushedStack.append(false)
                 break;
             case .target:
                 enterContext(kind: .ForInOf)
+                forEachLeftContextPushedStack.append(true)
         }
         return true
     }
 
     public func preAssignmentTarget(nodeId: Int, node: AssignmentTarget) -> Bool {
-        enterContext(kind: .Write)
+        if refContextStack.last == .ForInOf {
+            assignmentTargetContextPushedStack.append(false)
+        } else {
+            enterContext(kind: assignmentTargetKindStack.last ?? .Write)
+            assignmentTargetContextPushedStack.append(true)
+        }
         return true
     }
 
     public func postAssignmentTarget(nodeId: Int, node: AssignmentTarget) {
-        exitContext()
+        if assignmentTargetContextPushedStack.popLast() == true {
+            exitContext()
+        }
     }
 
 
@@ -261,7 +281,9 @@ extension RefBinder: NodeWalker {
 
 
     public func postForEachLeft(nodeId: Int, node: ForEachLeft) {
-        
+        if forEachLeftContextPushedStack.popLast() == true {
+            exitContext()
+        }
     }
 
     public func prePattern(nodeId: Int, node: Pattern) -> Bool {
