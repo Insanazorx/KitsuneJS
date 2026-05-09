@@ -13,7 +13,7 @@ namespace JSBackend::GarbageCollector {
 
         virtual bool is_cell() const { return true; }
 
-        virtual void get_visited(Visitor& visitor) = 0;
+        virtual void visit(Visitor& visitor);
 
         void mark () { marked = 1; }
         void unmark () { marked = 0; }

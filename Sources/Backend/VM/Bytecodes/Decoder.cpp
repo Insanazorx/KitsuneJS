@@ -155,7 +155,7 @@ namespace JSBackend::Bytecode {
 
 #define DEFINE_HANDLER(NAME, OPERANDS) \
     void Decoder::decode_##NAME() { \
-        auto instruction = std::make_unique<Interpreter::NAME##Instruction>(); \
+        auto instruction = new Interpreter::NAME##Instruction(); \
         instruction->setOffset(m_offset); \
         readByte();    \
         try {                                   \
@@ -177,9 +177,6 @@ namespace JSBackend::Bytecode {
 
             std::cout << "Instructions:\n";
             for (const auto& instr : instructions) {
-                if (instr == nullptr) {
-                    continue;
-                }
                 std::cout << std::hex << instr->offset() << "  " << instr->toString() << "\n";
             }
             std::cout << std::dec;

@@ -225,8 +225,8 @@ Block 2:
   popLexicalEnvironment
   return
 === Constants Pool ===
+Index: 0, Value: a
 Index: 3, Value: log
 Index: 2, Value: console
-Index: 1, Value: foo
-Index: 0, Value: a
 Index: 4, Value: bar
+Index: 1, Value: foo

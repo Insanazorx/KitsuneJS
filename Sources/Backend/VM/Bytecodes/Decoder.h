@@ -23,7 +23,7 @@ namespace JSBackend::Bytecode {
 
     struct DecodeResult {
         std::unordered_map<uint32_t, uint32_t> offsetToLogicalAddress;
-        std::vector<std::unique_ptr<Interpreter::Instruction>> instructions;
+        std::vector<Interpreter::Instruction*> instructions;
         std::unordered_map<FunctionID, uint32_t> functionTable;
         std::unordered_map<CPIndex, std::string> constantPool;
 
@@ -144,9 +144,9 @@ namespace JSBackend::Bytecode {
 
         void verifyHeader();
 
-        void putInstruction(std::unique_ptr<Interpreter::Instruction> instruction) {
+        void putInstruction(Interpreter::Instruction* instruction) {
             const auto offset = instruction->offset();
-            m_result.instructions.push_back(std::move(instruction));
+            m_result.instructions.push_back(instruction);
             m_result.offsetToLogicalAddress.emplace(offset, m_result.instructions.size() - 1);
         }
 
