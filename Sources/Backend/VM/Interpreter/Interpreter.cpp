@@ -1,11 +1,17 @@
 #include "Interpreter.h"
 
+#include <cassert>
+#include <iostream>
+
+#include "Runtime/JSValue.h"
+
+
 namespace JSBackend::Interpreter {
 
     void Interpreter::run() {
         for (auto& inst : m_globalCodeBlock.instructions) {
             switch (inst->OpType()) {
-            #define HANDLE_BYTECODE(Name, Operands) case Bytecode::Op::Name: execute_##Name(dynamic_cast<Name##Instruction*>(inst)); break;
+            #define HANDLE_BYTECODE(Name, Operands) case Bytecode::Op::Name: execute_##Name(dynamic_cast<Bytecode::Name##Instruction*>(inst)); break;
                 BC_ALL(HANDLE_BYTECODE)
             #undef HANDLE_BYTECODE
                 default:
@@ -14,7 +20,7 @@ namespace JSBackend::Interpreter {
             }
     }
 
-#define DECLARE_HANDLER(Name) void Interpreter::execute_##Name(const Name##Instruction* inst)
+#define DECLARE_HANDLER(Name) void Interpreter::execute_##Name(const Bytecode::Name##Instruction* inst)
 
     DECLARE_HANDLER(nop) {}
     DECLARE_HANDLER(coverageMark) {}
@@ -25,7 +31,7 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(unreachable) {}
     DECLARE_HANDLER(halt) {}
     DECLARE_HANDLER(enterGlobal) {
-
+        std::cout << "Entering global code block" << std::endl;
     }
     DECLARE_HANDLER(enterFunction) {}
     DECLARE_HANDLER(move) {}
@@ -34,7 +40,12 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(loadThis) {}
     DECLARE_HANDLER(loadNewTarget) {}
     DECLARE_HANDLER(loadSuperConstructor) {}
-    DECLARE_HANDLER(loadUndefined) {}
+    DECLARE_HANDLER(loadUndefined) {
+        assert(inst->OpType() == Bytecode::Op::loadUndefined);
+        const auto val = Runtime::JSValue::undefined();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(val.rawBits());
+    }
     DECLARE_HANDLER(loadNull) {}
     DECLARE_HANDLER(loadTrue) {}
     DECLARE_HANDLER(loadFalse) {}
@@ -82,7 +93,9 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(initGlobalLexical) {}
     DECLARE_HANDLER(getGlobalVar) {}
     DECLARE_HANDLER(putGlobalVar) {}
-    DECLARE_HANDLER(initGlobalVar) {}
+    DECLARE_HANDLER(initGlobalVar) {
+
+    }
     DECLARE_HANDLER(getGlobalProperty) {}
     DECLARE_HANDLER(putGlobalProperty) {}
     DECLARE_HANDLER(typeofGlobal) {}

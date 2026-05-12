@@ -1,11 +1,10 @@
 #pragma once
 #include <vector>
 
+#include "JSValue.h"
 
 
 namespace JSBackend::Runtime {
-    class JSValue;
-
     class Environment {
     public:
         virtual ~Environment() = default;

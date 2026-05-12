@@ -3,17 +3,19 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
-
-class JSCell;
-class JSObject;
-class JSString;
-class JSFunction;
-class JSArray;
-class JSSymbol;
-class JSBigInt;
-class JSEnvironment;
+#include "../GC/JSCell.h"
 
 namespace JSBackend::Runtime {
+    using JSCell = GarbageCollector::JSCell;
+
+    class JSObject;
+    class JSString;
+    class JSFunction;
+    class JSArray;
+    class JSSymbol;
+    class JSBigInt;
+    class JSEnvironment;
+
     class JSValue {
     public:
         enum class ImmediateTag : uint16_t {

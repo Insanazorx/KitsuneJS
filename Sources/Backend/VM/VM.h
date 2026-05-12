@@ -1,40 +1,41 @@
 #pragma once
 
-#include "Bytecodes/Decoder.h"
-#include "Interpreter/Interpreter.h"
+#include <memory>
+#include <utility>
 
+#include "GC/Heap.h"
 
 
 namespace JSBackend {
+    namespace Bytecode {
+        struct DecodeResult;
+    }
+    namespace Interpreter {
+        class Interpreter;
+    }
     namespace Runtime {
         class GlobalObject;
-    }
-    namespace GarbageCollector {
-        class Heap;
     }
 
     class VM {
     public:
-        explicit VM(Bytecode::DecodeResult decodeResult)
-            : m_interpreter(*this,std::move(decodeResult))
-        {}
+        explicit VM(Bytecode::DecodeResult decodeResult);
+        ~VM();
 
-        Runtime::GlobalObject* globalObject() const { return m_globalObject; }
+        Runtime::GlobalObject* globalObject() const { return m_globalObject;}
         GarbageCollector::Heap& heap() { return m_heap; }
 
-
-        void initialize() {
-            m_globalObject = Runtime::GlobalObject::Create(*this);
-
+        template <typename T, typename... Args>
+        T* allocate(Args&&... args) {
+            return m_heap.allocate<T>(std::forward<Args>(args)...);
         }
-        void run() {
 
-            m_interpreter.run();
-        }
+        void initialize();
+        void run();
 
     private:
-        Runtime::GlobalObject* m_globalObject;
-        Interpreter::Interpreter m_interpreter;
+        Runtime::GlobalObject* m_globalObject {nullptr};
+        std::unique_ptr<Interpreter::Interpreter> m_interpreter;
         GarbageCollector::Heap m_heap;
     };
 }

@@ -16,6 +16,7 @@ set(JSBACKEND_PUBLIC_HEADERS
         ${JSBACKEND_SOURCE_ROOT}/CABI/JSBackendCAPI.h
         ${JSBACKEND_SOURCE_ROOT}/Context/Context.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Bytecodes.h
+        ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/CodeBlock.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Interpreter.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Instruction.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
@@ -52,9 +53,12 @@ set_source_files_properties(${JSBACKEND_IDE_ONLY_SOURCES}
 
 add_library(JSBackendCABI SHARED
         ${JSBACKEND_SOURCE_ROOT}/CABI/JSBackendCAPI.cpp
+        ${JSBACKEND_SOURCE_ROOT}/Context/Context.cpp
+        ${JSBACKEND_SOURCE_ROOT}/VM/VM.cpp
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Interpreter.cpp
     ${JSBACKEND_PUBLIC_HEADERS}
         ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/Instruction.h
+        ${JSBACKEND_SOURCE_ROOT}/VM/Bytecodes/CodeBlock.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Register.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/CodeBlock.h
         ${JSBACKEND_SOURCE_ROOT}/VM/Runtime/JSValue.h
@@ -181,6 +185,8 @@ source_group(TREE "${JSBACKEND_SOURCE_ROOT}"
     PREFIX "Backend"
     FILES
         ${JSBACKEND_SOURCE_ROOT}/CABI/JSBackendCAPI.cpp
+        ${JSBACKEND_SOURCE_ROOT}/Context/Context.cpp
+        ${JSBACKEND_SOURCE_ROOT}/VM/VM.cpp
         ${JSBACKEND_SOURCE_ROOT}/VM/Interpreter/Interpreter.cpp
         ${JSBACKEND_SOURCE_ROOT}/Tools/RunSwift.cpp
         ${JSBACKEND_SOURCE_ROOT}/Tools/CLionMainConf.cpp

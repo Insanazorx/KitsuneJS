@@ -131,7 +131,7 @@ namespace JSBackend::Bytecode {
             }
 
             const auto codeBlockId = readUint32();
-            if (codeBlockId != Runtime::CodeBlock::GlobalCodeBlockID && !m_result.functionTable.contains(codeBlockId)) {
+            if (codeBlockId != CodeBlock::GlobalCodeBlockID && !m_result.functionTable.contains(codeBlockId)) {
                 throw std::runtime_error("Invalid bytecode: constant pool for unknown function code block id " + std::to_string(codeBlockId));
             }
 
@@ -157,14 +157,8 @@ namespace JSBackend::Bytecode {
             return lhs.second < rhs.second;
         });
 
-        m_result.globalCodeBlock.id = Runtime::CodeBlock::GlobalCodeBlockID;
-        m_result.globalCodeBlock.startOffset = m_instructionsStartOffset;
-        m_result.globalCodeBlock.endOffset = functionStarts.empty() ? codeEnd : functionStarts.front().second;
+        m_result.globalCodeBlock.id = CodeBlock::GlobalCodeBlockID;
 
-        if (m_result.globalCodeBlock.endOffset < m_result.globalCodeBlock.startOffset ||
-            m_result.globalCodeBlock.endOffset > codeEnd) {
-            throw std::runtime_error("Invalid bytecode: malformed global code block range");
-        }
 
         for (size_t index = 0; index < functionStarts.size(); ++index) {
             const auto [functionId, startOffset] = functionStarts[index];
@@ -178,15 +172,11 @@ namespace JSBackend::Bytecode {
 
             auto& codeBlock = m_result.functionCodeBlocks[functionId];
             codeBlock.id = functionId;
-            codeBlock.startOffset = startOffset;
-            codeBlock.endOffset = endOffset;
         }
 
-        auto attachInstruction = [](Runtime::CodeBlock& codeBlock, Interpreter::Instruction* instruction) {
+        auto attachInstruction = [](CodeBlock& codeBlock, Instruction* instruction) {
             const auto offset = instruction->offset();
-            if (offset >= codeBlock.startOffset && offset < codeBlock.endOffset) {
-                codeBlock.instructions.push_back(instruction);
-            }
+
         };
 
         for (auto* instruction : m_result.instructions) {
@@ -234,7 +224,7 @@ namespace JSBackend::Bytecode {
 
 #define DEFINE_HANDLER(NAME, OPERANDS) \
     void Decoder::decode_##NAME() { \
-        auto instruction = new Interpreter::NAME##Instruction(); \
+        auto instruction = new NAME##Instruction(); \
         instruction->setOffset(m_offset); \
         readByte();    \
         try {                                   \
@@ -264,10 +254,9 @@ namespace JSBackend::Bytecode {
                 std::cout << "  ID: " << entry.first << ", Offset: " << entry.second << "\n";
             }
 
-            auto printCodeBlock = [](const char* label, const Runtime::CodeBlock& codeBlock) {
+            auto printCodeBlock = [](const char* label, const CodeBlock& codeBlock) {
                 std::cout << label << " CodeBlock"
-                          << " [0x" << std::hex << codeBlock.startOffset
-                          << ", 0x" << codeBlock.endOffset << std::dec << "):\n";
+                            << " (ID: " << codeBlock.id << ")\n";
 
                 std::cout << "  Instructions:\n";
                 for (const auto* instr : codeBlock.instructions) {

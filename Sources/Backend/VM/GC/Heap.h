@@ -1,7 +1,12 @@
 #pragma once
+#include <cstddef>
+#include <cstdint>
+#include <new>
 #include <sys/mman.h>
+#include <utility>
+#include <vector>
 
-#include "Cell.h"
+#include "JSCell.h"
 #include "Region.h"
 #include "../debug.h"
 

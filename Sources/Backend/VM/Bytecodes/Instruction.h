@@ -7,8 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace JSBackend::Interpreter {
-    using namespace Bytecode;
+namespace JSBackend::Bytecode {
 
     template <typename T>
     std::string operandToString(const T& value) {
@@ -34,7 +33,7 @@ namespace JSBackend::Interpreter {
         virtual ~Instruction() = default;
         void setOffset(uint32_t _offset) {this->m_offset = _offset;}
         uint32_t offset() const {return m_offset;}
-        virtual Bytecode::Op OpType() const {return Bytecode::Op::unreachable;}
+        virtual Op OpType() const {return Op::unreachable;}
         virtual std::string toString() const {return "Unresolved instruction!";;}
     protected:
         uint32_t m_offset = 0;
@@ -56,7 +55,7 @@ namespace JSBackend::Interpreter {
     class NAME##Instruction : public Instruction {  \
        OPERANDS(OPERAND_MEMBER_EXPANDER)                     \
        public:                                      \
-       Bytecode::Op OpType() const override {return Bytecode::Op::NAME;}      \
+       Op OpType() const override {return Op::NAME;}      \
        std::string toString() const override {      \
          std::ostringstream oss;                    \
          oss << "[0x" << std::hex << Instruction::offset() << "]"; \
@@ -72,6 +71,5 @@ namespace JSBackend::Interpreter {
 #undef OPERAND_MEMBER_EXPANDER
 #undef OPERAND_TOSTRING_EXPANDER
 }
-
 
 

@@ -1,21 +1,18 @@
 #pragma once
+#include <cstdint>
+#include <unordered_map>
+#include <utility>
 #include <vector>
-#include "Bytecodes/Instruction.h"
 
-#include "Register.h"
-#include "../Bytecodes/Bytecodes.h"
+#include "Bytecodes/CodeBlock.h"
 #include "Bytecodes/Decoder.h"
-
-namespace JSBackend {
-    class VM;
-}
+#include "Bytecodes/Instruction.h"
+#include "Register.h"
 
 namespace JSBackend::Interpreter {
-#define BYTECODE_HANDLER(Name, Operands) void Interpreter::execute##Name(const Instruction& inst);
-
     class Interpreter{
     public:
-        explicit Interpreter(VM& vm, DecodeResult decodeResult) : vm(vm) {
+        explicit Interpreter(Bytecode::DecodeResult decodeResult) {
             // Initialize{ 256 registers
             m_offsetToLogicalAddress = std::move(decodeResult.offsetToLogicalAddress);
             m_functionTable = std::move(decodeResult.functionTable);
@@ -29,18 +26,17 @@ namespace JSBackend::Interpreter {
 
         void run();
 
-        #define DEFINE_BYTECODE_HANDLER(Name, Operands) void execute_##Name(const Name##Instruction* inst);
+        #define DEFINE_BYTECODE_HANDLER(Name, Operands) void execute_##Name(const Bytecode::Name##Instruction* inst);
         BC_ALL(DEFINE_BYTECODE_HANDLER)
         #undef DEFINE_BYTECODE_HANDLER
 
     private:
-        VM& vm;
         std::vector<Register> m_registers; // Initialize 256 registers
 
         std::unordered_map<uint32_t, uint32_t> m_offsetToLogicalAddress;
-        std::unordered_map<FunctionID, uint32_t> m_functionTable;
-        Runtime::CodeBlock m_globalCodeBlock;
-        std::unordered_map<FunctionID, Runtime::CodeBlock> m_functionCodeBlocks;
+        std::unordered_map<Bytecode::FunctionID, uint32_t> m_functionTable;
+        Bytecode::CodeBlock m_globalCodeBlock;
+        std::unordered_map<Bytecode::FunctionID, Bytecode::CodeBlock> m_functionCodeBlocks;
 
     };
 }

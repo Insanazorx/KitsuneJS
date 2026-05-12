@@ -770,6 +770,12 @@ extension BytecodeCompiler {
                     
             case .literal(let literal):
                 return compileLiteralExpression(currentNodeId: currentNodeId, literal)
+
+            case .this:
+                let resultReg = allocRegister()
+                emit(.loadThis(dst: resultReg))
+                return .expr(resultReg)
+
             default:
                 fatalError("Unsupported nud expression")
         }
@@ -1211,6 +1217,11 @@ extension BytecodeCompiler {
                     if case .var = declKind {
                         emitOnTopLevel(.initLocal(
                             slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
+                            src: universalCompilerUndefinedReg()
+                        ))
+
+                        emit(.putLocal(
+                            slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
                             src: declInfo.reg ?? universalCompilerUndefinedReg()
                         ))
 
@@ -1228,7 +1239,12 @@ extension BytecodeCompiler {
                         case .var:
                             emitOnTopLevel(.initGlobalVar(
                                 slot: Bytecode.GlobalSlot(rawValue: declInfo.slot),
-                                src: declInfo.reg ?? universalCompilerUndefinedReg()
+                                src: universalCompilerUndefinedReg()
+                            ))
+                            emit(.putGlobalVar(
+                                slot: Bytecode.GlobalSlot(rawValue: declInfo.slot),
+                                src: declInfo.reg ?? universalCompilerUndefinedReg(),
+                                cache: allocICSlot()
                             ))
 
                         case .let, .const:

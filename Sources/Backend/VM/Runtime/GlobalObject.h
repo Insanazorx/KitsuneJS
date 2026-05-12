@@ -1,19 +1,14 @@
 #pragma once
-#include "Environment.h"
 #include "JSObject.h"
-#include "../GC/Heap.h"
 
 
 namespace JSBackend::Runtime {
     class JSFunction;
+    class Environment;
 
     class GlobalObject : public JSObject {
     public:
-        static GlobalObject* Create(VM& vm) {
-            auto *globalObject = vm.heap().allocate<GlobalObject>();
 
-
-        }
         ~GlobalObject() override = default;
 
     private:

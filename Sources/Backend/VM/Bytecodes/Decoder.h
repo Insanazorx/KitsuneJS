@@ -16,8 +16,8 @@
 #include <span>
 
 #include "Bytecodes.h"
+#include "CodeBlock.h"
 #include "Instruction.h"
-#include "../Runtime/CodeBlock.h"
 
 namespace JSBackend::Bytecode {
 
@@ -25,11 +25,11 @@ namespace JSBackend::Bytecode {
 
     struct DecodeResult {
         std::unordered_map<uint32_t, uint32_t> offsetToLogicalAddress;
-        std::vector<Interpreter::Instruction*> instructions;
+        std::vector<Instruction*> instructions;
         std::unordered_map<FunctionID, uint32_t> functionTable;
         std::unordered_map<CPIndex, std::string> constantPool;
-        Runtime::CodeBlock globalCodeBlock;
-        std::unordered_map<FunctionID, Runtime::CodeBlock> functionCodeBlocks;
+        CodeBlock globalCodeBlock;
+        std::unordered_map<FunctionID, CodeBlock> functionCodeBlocks;
 
         void print() const;
     };
@@ -152,7 +152,7 @@ namespace JSBackend::Bytecode {
 
         void verifyHeader();
 
-        void putInstruction(Interpreter::Instruction* instruction) {
+        void putInstruction(Instruction* instruction) {
             const auto offset = instruction->offset();
             m_result.instructions.push_back(instruction);
             m_result.offsetToLogicalAddress.emplace(offset, m_result.instructions.size() - 1);
@@ -165,11 +165,11 @@ namespace JSBackend::Bytecode {
 
             auto& codeBlock = m_result.functionCodeBlocks[id];
             codeBlock.id = id;
-            codeBlock.startOffset = offset;
+
         }
 
         void putConstantPoolEntry(uint32_t codeBlockId, CPIndex index, std::string value) {
-            if (codeBlockId == Runtime::CodeBlock::GlobalCodeBlockID) {
+            if (codeBlockId == CodeBlock::GlobalCodeBlockID) {
                 m_result.globalCodeBlock.constantPool.emplace(index, value);
                 m_result.constantPool.emplace(index, std::move(value));
                 return;
