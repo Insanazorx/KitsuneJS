@@ -154,10 +154,23 @@ namespace JSBackend::Bytecode {
             m_result.functionTable.end()
         );
         std::ranges::sort(functionStarts, [](const auto& lhs, const auto& rhs) {
+            if (lhs.second == rhs.second) {
+                return lhs.first < rhs.first;
+            }
             return lhs.second < rhs.second;
         });
 
         m_result.globalCodeBlock.id = CodeBlock::GlobalCodeBlockID;
+        m_result.globalCodeBlock.startOffset = m_instructionsStartOffset;
+        m_result.globalCodeBlock.endOffset = functionStarts.empty()
+            ? codeEnd
+            : functionStarts.front().second;
+        m_result.globalCodeBlock.instructions.clear();
+
+        if (m_result.globalCodeBlock.endOffset < m_result.globalCodeBlock.startOffset ||
+            m_result.globalCodeBlock.endOffset > codeEnd) {
+            throw std::runtime_error("Invalid bytecode: malformed global code block range");
+        }
 
 
         for (size_t index = 0; index < functionStarts.size(); ++index) {
@@ -172,11 +185,16 @@ namespace JSBackend::Bytecode {
 
             auto& codeBlock = m_result.functionCodeBlocks[functionId];
             codeBlock.id = functionId;
+            codeBlock.startOffset = startOffset;
+            codeBlock.endOffset = endOffset;
+            codeBlock.instructions.clear();
         }
 
         auto attachInstruction = [](CodeBlock& codeBlock, Instruction* instruction) {
             const auto offset = instruction->offset();
-
+            if (offset >= codeBlock.startOffset && offset < codeBlock.endOffset) {
+                codeBlock.instructions.push_back(instruction);
+            }
         };
 
         for (auto* instruction : m_result.instructions) {

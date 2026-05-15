@@ -3,6 +3,7 @@
 #include <exception>
 #include <iostream>
 
+#include "VM.h"
 #include "Bytecodes/Decoder.h"
 
 namespace JSBackend {
@@ -47,7 +48,12 @@ namespace JSBackend {
 
             Bytecode::Decoder decoder(serializedBytecode_, serializedBytecode_.size());
             decoder.decode();
-            decoder.result().print();
+            auto decodeResult = decoder.result();
+            decodeResult.print();
+
+            VM vm(std::move(decodeResult));
+            vm.initialize();
+            vm.run();
 
             lastRunBytecodeSize_ = serializedBytecode_.size();
             stage_ = PipelineStage::Ran;

@@ -32,6 +32,15 @@ namespace JSBackend::Runtime {
 
         JSObject* prototype() const { return m_prototype; }
 
+    void setPrototype(JSObject* proto) { m_prototype = proto; }
+
+
+
+    void installBuiltinFunction(std::string&& name, JSValue function) {
+
+    }
+
+
 
     protected:
         JSObject* m_prototype{nullptr};

@@ -3,13 +3,23 @@
 #include <cassert>
 #include <iostream>
 
+#include "Runtime/CallFrame.h"
+#include "Runtime/Environment.h"
+#include "Runtime/GlobalObject.h"
 #include "Runtime/JSValue.h"
+#include "Runtime/JSFunction.h"
+
+
+
 
 
 namespace JSBackend::Interpreter {
+#define DEBUG_INTERPRETER
+
 
     void Interpreter::run() {
-        for (auto& inst : m_globalCodeBlock.instructions) {
+        Bytecode::Instruction* inst = nullptr;
+        while (inst = nextInstruction(), inst != nullptr) {
             switch (inst->OpType()) {
             #define HANDLE_BYTECODE(Name, Operands) case Bytecode::Op::Name: execute_##Name(dynamic_cast<Bytecode::Name##Instruction*>(inst)); break;
                 BC_ALL(HANDLE_BYTECODE)
@@ -29,7 +39,10 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(debugDumpScope) {}
     DECLARE_HANDLER(debugDumpIC) {}
     DECLARE_HANDLER(unreachable) {}
-    DECLARE_HANDLER(halt) {}
+    DECLARE_HANDLER(halt) {
+        std::cout << "Halting interpreter" << std::endl;
+        haltInterpreter();
+    }
     DECLARE_HANDLER(enterGlobal) {
         std::cout << "Entering global code block" << std::endl;
     }
@@ -37,7 +50,21 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(move) {}
     DECLARE_HANDLER(clearReg) {}
     DECLARE_HANDLER(swap) {}
-    DECLARE_HANDLER(loadThis) {}
+    DECLARE_HANDLER(loadThis) {
+        assert(inst->OpType() == Bytecode::Op::loadThis);
+
+        auto thisValue = m_currentCodeBlock->callFrame()->thisValue();
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(thisValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "loadThis: loaded this value into register "
+        << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+
+
+    }
     DECLARE_HANDLER(loadNewTarget) {}
     DECLARE_HANDLER(loadSuperConstructor) {}
     DECLARE_HANDLER(loadUndefined) {
@@ -45,12 +72,30 @@ namespace JSBackend::Interpreter {
         const auto val = Runtime::JSValue::undefined();
         const auto dst = inst->dst();
         m_registers[dst].write64(val.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "loadUndefined: loaded undefined value into register "
+        << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
     }
     DECLARE_HANDLER(loadNull) {}
     DECLARE_HANDLER(loadTrue) {}
     DECLARE_HANDLER(loadFalse) {}
     DECLARE_HANDLER(loadEmpty) {}
-    DECLARE_HANDLER(loadInt32) {}
+    DECLARE_HANDLER(loadInt32) {
+        assert(inst->OpType() == Bytecode::Op::loadInt32);
+
+        const auto value = inst->value();
+        const auto jsValue = Runtime::JSValue::number(value);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(jsValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "loadInt32: loaded int32 value " << value
+        << " into register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(loadDouble) {}
     DECLARE_HANDLER(loadString) {}
     DECLARE_HANDLER(loadBigInt) {}
@@ -64,7 +109,27 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(newObjectLiteral) {}
     DECLARE_HANDLER(newArrayLiteral) {}
     DECLARE_HANDLER(newRegExp) {}
-    DECLARE_HANDLER(createFunction) {}
+    DECLARE_HANDLER(createFunction) {
+        assert(inst->OpType() == Bytecode::Op::createFunction);
+
+        const auto functionId = inst->function();
+
+        const auto codeBlockIt = m_functionCodeBlocks.find(functionId);
+        if (codeBlockIt == m_functionCodeBlocks.end()) {
+            throw std::runtime_error("Code block for function ID " + std::to_string(functionId) + " not found");
+        }
+        auto& codeBlock = codeBlockIt->second;
+        auto functionObject = vm.allocate<Runtime::JSFunction>(codeBlock, functionId);
+        auto jsValue = Runtime::JSValue::cell(functionObject);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(jsValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "createFunction: created function object for function ID " << functionId
+        << " and stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(createClosure) {}
     DECLARE_HANDLER(createArrowClosure) {}
     DECLARE_HANDLER(createGeneratorClosure) {}
@@ -79,7 +144,20 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(initLocal) {}
     DECLARE_HANDLER(checkTDZLocal) {}
 
-    DECLARE_HANDLER(createLexicalEnvironment) {}
+    DECLARE_HANDLER(createLexicalEnvironment) {
+        assert(inst->OpType() == Bytecode::Op::createLexicalEnvironment);
+
+        auto newEnv = vm.allocate<Runtime::Environment>();
+        auto jsValue = Runtime::JSValue::cell(newEnv);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(jsValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "createLexicalEnvironment: created new lexical environment and stored in register "
+        << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(pushLexicalEnvironment) {}
     DECLARE_HANDLER(popLexicalEnvironment) {}
     DECLARE_HANDLER(getContext) {}
@@ -91,10 +169,47 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(getGlobalLexical) {}
     DECLARE_HANDLER(putGlobalLexical) {}
     DECLARE_HANDLER(initGlobalLexical) {}
-    DECLARE_HANDLER(getGlobalVar) {}
-    DECLARE_HANDLER(putGlobalVar) {}
+    DECLARE_HANDLER(getGlobalVar) {
+        assert(inst->OpType() == Bytecode::Op::getGlobalVar);
+
+        auto globalEnv = vm.globalObject()->globalEnvironment();
+        auto slot = inst->slot();
+        auto value = globalEnv->getBinding(slot);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(value.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "getGlobalVar: loaded global variable from slot " << slot
+        << " with value " << value.rawBits() << " into register " << dst << "\n";
+#endif
+    }
+    DECLARE_HANDLER(putGlobalVar) {
+        assert(inst->OpType() == Bytecode::Op::putGlobalVar);
+
+        auto globalEnv = vm.globalObject()->globalEnvironment();
+        const auto valueReg = inst->src();
+        auto jsvalue = Runtime::JSValue::fromRawBits(m_registers[valueReg].read64());
+        auto slot = inst->slot();
+
+        globalEnv->putBinding(slot,jsvalue);
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "putGlobalVar: stored value from register " << valueReg << " = " << jsvalue.rawBits()
+        << " into global variable slot " << slot << "\n";
+#endif
+    }
     DECLARE_HANDLER(initGlobalVar) {
 
+        assert(inst->OpType() == Bytecode::Op::initGlobalVar);
+
+        auto globalEnv = vm.globalObject()->globalEnvironment();
+        const auto valueReg = inst->src();
+        auto jsvalue = Runtime::JSValue::fromRawBits(m_registers[valueReg].read64());
+
+        auto slot = inst->slot();
+
+        globalEnv->initBinding(slot,jsvalue);
     }
     DECLARE_HANDLER(getGlobalProperty) {}
     DECLARE_HANDLER(putGlobalProperty) {}
@@ -138,7 +253,22 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(toNumeric) {}
     DECLARE_HANDLER(toString) {}
     DECLARE_HANDLER(toObject) {}
-    DECLARE_HANDLER(toBoolean) {}
+    DECLARE_HANDLER(toBoolean) {
+        assert(inst->OpType() == Bytecode::Op::toBoolean);
+
+        const auto srcReg = inst->src();
+
+        auto value = Runtime::JSValue::fromRawBits(m_registers[srcReg].read64());
+        bool boolValue = value.asBoolean();
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(Runtime::JSValue::boolean(boolValue).rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "toBoolean: converted value in register " << srcReg << " = " << value.rawBits()
+        << " to boolean " << boolValue << " and stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(toPropertyKey) {}
     DECLARE_HANDLER(isCallable) {}
     DECLARE_HANDLER(isConstructor) {}
@@ -150,32 +280,339 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(increment) {}
     DECLARE_HANDLER(decrement) {}
 
-    DECLARE_HANDLER(add) {}
-    DECLARE_HANDLER(sub) {}
-    DECLARE_HANDLER(mul) {}
-    DECLARE_HANDLER(div) {}
-    DECLARE_HANDLER(mod) {}
+    DECLARE_HANDLER(add) {
+        assert(inst->OpType() == Bytecode::Op::add);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(leftValue.asNumber() + rightValue.asNumber());
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "add: added values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(sub) {
+        assert(inst->OpType() == Bytecode::Op::sub);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(leftValue.asNumber() - rightValue.asNumber());
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "sub: subtracted values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(mul) {
+        assert(inst->OpType() == Bytecode::Op::mul);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(leftValue.asNumber() * rightValue.asNumber());
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+    }
+    DECLARE_HANDLER(div) {
+        assert(inst->OpType() == Bytecode::Op::div);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(leftValue.asNumber() / rightValue.asNumber());
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "div: divided values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(mod) {
+        assert(inst->OpType() == Bytecode::Op::mod);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(std::fmod(leftValue.asNumber(), rightValue.asNumber()));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "mod: calculated modulus of values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(pow) {}
-    DECLARE_HANDLER(bitAnd) {}
-    DECLARE_HANDLER(bitOr) {}
-    DECLARE_HANDLER(bitXor) {}
-    DECLARE_HANDLER(leftShift) {}
-    DECLARE_HANDLER(rightShift) {}
-    DECLARE_HANDLER(unsignedRightShift) {}
-    DECLARE_HANDLER(equal) {}
-    DECLARE_HANDLER(notEqual) {}
+    DECLARE_HANDLER(bitAnd) {
+        assert(inst->OpType() == Bytecode::Op::bitAnd);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<int32_t>(leftValue.asNumber()) & static_cast<int32_t>(rightValue.asNumber()));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "bitAnd: performed bitwise AND on values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(bitOr) {
+        assert(inst->OpType() == Bytecode::Op::bitOr);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<int32_t>(leftValue.asNumber()) | static_cast<int32_t>(rightValue.asNumber()));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "bitOr: performed bitwise OR on values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(bitXor) {
+        assert(inst->OpType() == Bytecode::Op::bitXor);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<int32_t>(leftValue.asNumber()) ^ static_cast<int32_t>(rightValue.asNumber()));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "bitXor: performed bitwise XOR on values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(leftShift) {
+        assert(inst->OpType() == Bytecode::Op::leftShift);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<int32_t>(leftValue.asNumber()) << (static_cast<int32_t>(rightValue.asNumber()) & 0x1F));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "leftShift: performed left shift on values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(rightShift) {
+        assert(inst->OpType() == Bytecode::Op::rightShift);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<int32_t>(leftValue.asNumber()) >> (static_cast<int32_t>(rightValue.asNumber()) & 0x1F));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "rightShift: performed right shift on values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(unsignedRightShift) {
+        assert(inst->OpType() == Bytecode::Op::unsignedRightShift);
+
+        auto leftReg = inst->lhs();
+        auto rightReg = inst->rhs();
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        auto result = Runtime::JSValue::number(static_cast<uint32_t>(leftValue.asNumber()) >> (static_cast<int32_t>(rightValue.asNumber()) & 0x1F));
+        auto dst = inst->dst();
+
+        m_registers[dst].write64(result.rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "unsignedRightShift: performed unsigned right shift on values in registers "
+        << leftReg << " = " << leftValue.rawBits() << " and " << rightReg << " = " << rightValue.rawBits()
+        << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(equal) {
+        assert(inst->OpType() == Bytecode::Op::equal);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() == rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "equal: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(notEqual) {
+        assert(inst->OpType() == Bytecode::Op::notEqual);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() != rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "notEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(strictEqual) {}
     DECLARE_HANDLER(strictNotEqual) {}
-    DECLARE_HANDLER(lessThan) {}
-    DECLARE_HANDLER(lessThanOrEqual) {}
-    DECLARE_HANDLER(greaterThan) {}
-    DECLARE_HANDLER(greaterThanOrEqual) {}
+    DECLARE_HANDLER(lessThan) {
+        assert(inst->OpType() == Bytecode::Op::lessThan);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() < rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "lessThan: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(lessThanOrEqual) {
+        assert(inst->OpType() == Bytecode::Op::lessThanOrEqual);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() <= rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "lessThanOrEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(greaterThan) {
+        assert(inst->OpType() == Bytecode::Op::greaterThan);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() > rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "greaterThan: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
+    DECLARE_HANDLER(greaterThanOrEqual) {
+        assert(inst->OpType() == Bytecode::Op::greaterThanOrEqual);
+
+        const auto leftReg = inst->lhs();
+        const auto rightReg = inst->rhs();
+
+        auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
+        auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
+
+        bool result = leftValue.asNumber() >= rightValue.asNumber();
+        const auto dst = inst->dst();
+        m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "greaterThanOrEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
+        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
+        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+#endif
+    }
     DECLARE_HANDLER(sameValue) {}
     DECLARE_HANDLER(sameValueZero) {}
     DECLARE_HANDLER(instanceOf) {}
     DECLARE_HANDLER(inOperator) {}
 
-    DECLARE_HANDLER(call) {}
+    DECLARE_HANDLER(call) {
+        //TODO: implement call handler:
+            assert(inst->OpType() == Bytecode::Op::call);
+
+            const auto functionReg = inst->callee();
+            auto functionValue = Runtime::JSValue::fromRawBits(m_registers[functionReg].read64());
+
+            if (!functionValue.isFunction()) {
+                throw std::runtime_error("Attempting to call a non-function value");
+            }
+
+            Runtime::JSFunction* functionObject = functionValue.asFunction();
+
+            std::cout << "Calling function with ID " << functionObject->functionID() << std::endl;
+
+            // For now, we will just return undefined for any function call
+            m_registers[inst->dst()].write64(Runtime::JSValue::undefined().rawBits());
+
+#ifdef DEBUG_INTERPRETER
+            std::cout<< "call: called function in register " << functionReg << " = " << functionValue.rawBits()
+            << ", result stored in register " << inst->dst() << " = " << m_registers[inst->dst()].read64() << "\n";
+#endif
+
+    }
     DECLARE_HANDLER(callDirect) {}
     DECLARE_HANDLER(callEval) {}
     DECLARE_HANDLER(callVarargs) {}
@@ -185,8 +622,53 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(superConstruct) {}
     DECLARE_HANDLER(superConstructVarargs) {}
 
-    DECLARE_HANDLER(jump) {}
-    DECLARE_HANDLER(jumpIfTrue) {}
+    DECLARE_HANDLER(jump) {
+        assert(inst->OpType() == Bytecode::Op::jump);
+
+        auto targetOffset = inst->offset();
+
+        //for only debug:
+        auto oldLogicalAddress = m_instructionPointer;
+
+        auto it = m_offsetToLogicalAddress.find(targetOffset);
+        if (it == m_offsetToLogicalAddress.end()) {
+            throw std::runtime_error("Invalid jump target offset: " + std::to_string(targetOffset));
+        }
+        auto targetLogicalAddress = it->second;
+
+        std::cout << "Jumping from logical address " << std::hex <<oldLogicalAddress << " to "<< std::hex << targetLogicalAddress << std::endl;
+
+        m_instructionPointer = targetLogicalAddress;
+
+        std::cout << "New instruction pointer is " << std::hex << m_instructionPointer << std::endl;
+    }
+    DECLARE_HANDLER(jumpIfTrue) {
+        assert(inst->OpType() == Bytecode::Op::jumpIfTrue);
+
+        const auto conditionReg = inst->value();
+
+        auto conditionValue = Runtime::JSValue::fromRawBits(m_registers[conditionReg].read64());
+
+        if (!conditionValue.isBoolean()) {
+            throw std::runtime_error("Condition value for jumpIfTrue is not a boolean");
+        }
+
+        if (conditionValue.asBoolean()) {
+            auto targetOffset = inst->offset();
+
+            auto it = m_offsetToLogicalAddress.find(targetOffset);
+            if (it == m_offsetToLogicalAddress.end()) {
+                throw std::runtime_error("Invalid jump target offset: " + std::to_string(targetOffset));
+            }
+            auto targetLogicalAddress = it->second;
+
+            std::cout << "Condition is true, jumping to logical address " << std::hex << targetLogicalAddress << std::endl;
+
+            m_instructionPointer = targetLogicalAddress;
+        } else {
+            std::cout << "Condition is false, not jumping" << std::endl;
+        }
+    }
     DECLARE_HANDLER(jumpIfFalse) {}
     DECLARE_HANDLER(jumpIfNull) {}
     DECLARE_HANDLER(jumpIfUndefined) {}
@@ -265,4 +747,8 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(intrinsicCall) {}
 
 #undef DECLARE_HANDLER
+
+#ifdef DEBUG_INTERPRETER
+#undef DEBUG_INTERPRETER
+#endif
 }

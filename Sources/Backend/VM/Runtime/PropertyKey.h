@@ -15,6 +15,10 @@ namespace JSBackend::Runtime {
             return {Kind::Identifier, std::move(name), 0};
         }
 
+        static PropertyKey symbol(std::string name) {
+            return {Kind::Symbol, std::move(name), 0};
+        }
+
         static PropertyKey arrayIndex(uint32_t index) {
             return {Kind::ArrayIndex, {}, index};
         }

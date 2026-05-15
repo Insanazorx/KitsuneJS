@@ -11,6 +11,9 @@ namespace JSBackend::Runtime {
 
         ~GlobalObject() override = default;
 
+        Environment* globalEnvironment() {return m_globalEnvironment;}
+        void setGlobalEnvironment(Environment* env) { m_globalEnvironment = env; }
+
     private:
 
         // The global environment record, which holds global context slots as JSValue

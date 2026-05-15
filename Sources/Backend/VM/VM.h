@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 
+#include "Bytecodes/Decoder.h"
 #include "GC/Heap.h"
 
 
@@ -35,7 +36,7 @@ namespace JSBackend {
 
     private:
         Runtime::GlobalObject* m_globalObject {nullptr};
-        std::unique_ptr<Interpreter::Interpreter> m_interpreter;
+        Interpreter::Interpreter* m_interpreter;
         GarbageCollector::Heap m_heap;
     };
 }

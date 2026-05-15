@@ -425,19 +425,15 @@ extension BytecodeCompiler {
     }
 
     func compileForStatement(currentNodeId: Int, _ initial: ForInit?, _ test: Expression?, _ update: Expression?, _ body: Statement) {
-        
-        let initReg, testReg, updateReg: Bytecode.Reg? 
-        
         if let initial = initial {
 
             switch initial {
                 case .declaration(let decl):
                     walkDeclaration(decl)
                 case .expression(let expr):
-                    guard case .expr(let reg) = walkExpression(expr) else {
+                    guard case .expr = walkExpression(expr) else {
                         fatalError("Unsupported expression result for for statement initial")
                     }
-                    initReg = reg
             }
         }
 
@@ -473,7 +469,7 @@ extension BytecodeCompiler {
                     falseBlockId: afterLoopBlock.id
                 ))
             } else {
-                emitTerminator(.jump(BlockID: updateBlock.id))
+                emitTerminator(.jump(BlockID: bodyBlock.id))
             }
         }
 
@@ -482,9 +478,9 @@ extension BytecodeCompiler {
         do {
             if let update = update {
                 _ = walkExpression(update)
-                emitTerminator(.jump(BlockID: bodyBlock.id))
+                emitTerminator(.jump(BlockID: testBlock.id))
             } else {
-                emitTerminator(.jump(BlockID: bodyBlock.id))
+                emitTerminator(.jump(BlockID: testBlock.id))
             }
         }
 
@@ -492,7 +488,7 @@ extension BytecodeCompiler {
 
         do {
             walkStatement(body)
-            emitTerminator(.jump(BlockID: testBlock.id))
+            emitTerminator(.jump(BlockID: updateBlock.id))
         }
 
         _ = switchBasicBlock(afterLoopBlock)

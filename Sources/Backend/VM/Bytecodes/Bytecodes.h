@@ -872,6 +872,15 @@ using OptionalCallSlot = std::optional<CallSlot>;
     #undef BC_OPERAND_SIZE
     #undef BC_WHOLE_INST_SIZE_CASE
 
+    inline std::string OpToString(Op op) {
+        switch (op) {
+        #define BC_TO_STRING(name, operands) case Op::name: return #name;
+            BC_ALL(BC_TO_STRING)
+        #undef BC_TO_STRING
+        default:
+            return "unknown";
+        }
+    }
 
 
 }
