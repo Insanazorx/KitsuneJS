@@ -1,7 +1,4 @@
-function foo() {
-    let a = 1;
-    return a + 1;
-}
+var a = x => x + 1;
 
 
 

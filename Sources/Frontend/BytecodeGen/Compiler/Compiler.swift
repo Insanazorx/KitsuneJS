@@ -890,10 +890,96 @@ extension BytecodeCompiler {
             case .objectLiteral(let properties):
                 return compileObjectLiteralExpression(currentNodeId: currentNodeId, properties)
 
+            case .arrowFunction(let args, let body, let isAsync):
+                return compileArrowFunction(currentNodeId: currentNodeId, args, body, isAsync)
+
             default:
                 fatalError("Unsupported nud expression")
         }
     
+    }
+
+    func compileArrowFunction(currentNodeId: Int, _ args: [Pattern]?, _ body: Statement, _ isAsync: Bool) -> ExprResult {
+        guard !isAsync else {
+            fatalError("Async arrow functions are not supported yet")
+        }
+
+        let resultReg = allocRegister()
+
+        let functionID = allocFunctionId()
+        
+        let envReg = allocRegister()
+        let layoutId = allocScopeLayout()
+
+        emit(.createArrowClosure(dst: resultReg, function: functionID, environment: envReg))
+        emit(.createLexicalEnvironment(dst: envReg, layout: layoutId))
+    
+        
+        let (oldBB, oldCP) = enterFunctionBBContext(funcId: functionID)
+        
+        emit(.enterFunction)
+        emit(.pushLexicalEnvironment(environment: envReg))
+
+        let paramInfos: [BytecodeCompiler.PatternBindingPlan] = if let parameters = args {
+            parameters.map { walkPattern($0) }
+        } else {
+            []
+        }
+        
+        if !paramInfos.isEmpty {
+            paramInfos.forEach {
+                
+                let declInfos: [BytecodeCompiler.VariableDeclInfo] = applyPatternPlan(patternPlan: $0, exprResult: nil)
+                let reg = allocRegister()
+                for declInfo in declInfos {
+                    emit(.getArgument(
+                        dst: declInfo.reg ?? reg,
+                        slot: allocArgumentSlot()
+                    ))
+
+                    emit(.initLocal(
+                        slot: Bytecode.LocalSlot(rawValue: declInfo.slot),
+                        src: declInfo.reg ?? reg
+                    ))
+                }
+            }
+        }
+        
+        if case .block = body{
+
+            do {
+                walkStatement(body)
+            }
+        
+            emitFunctionEpilogueIfNeeded()
+        
+            exitFunctionBBContext(oldBlock: oldBB, oldCP: oldCP)
+            resetArgumentSlots()
+
+        } else if case .expressionStatement(let expr) = body {
+            
+            // This is critical since we trespassed walkStatement and called directly
+            // walkExpression. For correct node Id allocation and other side effects, 
+            // we need to manually allocate a node id. 
+            _ = allocNodeId() 
+            
+            let returnValueResult = walkExpression(expr)
+            guard case .expr(let returnValueReg) = returnValueResult else {
+                fatalError("Unsupported expression result for arrow function concise body")
+            }
+
+            emit(.popLexicalEnvironment)
+            emitTerminator(.return(returnValueReg))
+
+            exitFunctionBBContext(oldBlock: oldBB, oldCP: oldCP)
+            resetArgumentSlots()
+        
+        } else {
+            fatalError("Unsupported arrow function body")
+        }
+
+        return .expr(resultReg)
+
     }
 
     func compileObjectLiteralExpression(currentNodeId: Int, _ properties: [ObjectProperty]) -> ExprResult {

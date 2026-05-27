@@ -3,8 +3,8 @@ Scope 0
 ├─ ownerFunction: nil
 ├─ bindings
 │  └─ Binding 0
-│     ├─ name: foo
-│     └─ kind: function
+│     ├─ name: a
+│     └─ kind: variable
 ├─ boundRefs
 │  └─ <empty>
 └─ children
@@ -14,46 +14,35 @@ Scope 0
       ├─ bindings
       │  └─ <empty>
       ├─ boundRefs
-      │  └─ <empty>
+      │  └─ BoundRef 9
+      │     ├─ name: x
+      │     ├─ kind: Read
+      │     ├─ bindingId: nil
+      │     ├─ captureDepth: 0
+      │     └─ storageKind: global
       └─ children
-         ├─ Scope 2
-         │  ├─ kind: param
-         │  ├─ ownerFunction: 2
-         │  ├─ bindings
-         │  │  └─ <empty>
-         │  ├─ boundRefs
-         │  │  └─ <empty>
-         │  └─ children
-         │     └─ <empty>
-         └─ Scope 3
-            ├─ kind: block
-            ├─ ownerFunction: 2
+         └─ Scope 2
+            ├─ kind: param
+            ├─ ownerFunction: 5
             ├─ bindings
             │  └─ Binding 1
-            │     ├─ name: a
-            │     └─ kind: lexical(isConst: false)
+            │     ├─ name: x
+            │     └─ kind: param
             ├─ boundRefs
-            │  └─ BoundRef 11
-            │     ├─ name: a
-            │     ├─ kind: Read
-            │     ├─ bindingId: 1
-            │     ├─ captureDepth: 0
-            │     └─ storageKind: lexical
+            │  └─ <empty>
             └─ children
                └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
-Node ID: 2-> FunctionDeclaration ("foo") -> Scope ID: 0
-Node ID: 3-> BlockStatement -> Scope ID: 1
-Node ID: 4-> DeclarationStatement -> Scope ID: 3
-Node ID: 5-> LexicalDeclaration -> Scope ID: 3
-Node ID: 6-> VariableDeclarator -> Scope ID: 3
-Node ID: 7-> BindingIdentifier ("a") -> Scope ID: 3
-Node ID: 8-> Literal -> Scope ID: 3
-Node ID: 9-> ReturnStatement -> Scope ID: 3
-Node ID: 10-> BinaryExpression -> Scope ID: 3
-Node ID: 11-> Identifier ("a") -> Scope ID: 3
-Node ID: 12-> Literal -> Scope ID: 3
+Node ID: 2-> VariableDeclaration -> Scope ID: 0
+Node ID: 3-> VariableDeclarator -> Scope ID: 0
+Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
+Node ID: 5-> ArrowFunctionExpression -> Scope ID: 0
+Node ID: 6-> BindingIdentifier ("x") -> Scope ID: 2
+Node ID: 7-> ExpressionStatement -> Scope ID: 1
+Node ID: 8-> BinaryExpression -> Scope ID: 1
+Node ID: 9-> Identifier ("x") -> Scope ID: 1
+Node ID: 10-> Literal -> Scope ID: 1
 
 
 ------------------
@@ -64,12 +53,13 @@ Node ID: 12-> Literal -> Scope ID: 3
 Block 0:
   enterGlobal
   loadUndefined r0
-  createFunction r1, f[0]
-  initGlobalVar global0, r1
+  initGlobalVar global0, r0
+  createArrowClosure r1, f[0], r2
   createLexicalEnvironment r2, layout0
+  putGlobalVar global0, r1, ic1
   halt
 === Global Constants Pool ===
-foo: 0
+a: 0
 === Function Table ===
 Function ID: FunctionID(rawValue: 0)
 CodeBlock:
@@ -77,12 +67,12 @@ Basic Blocks:
 Block 1:
   enterFunction
   pushLexicalEnvironment r2
-  loadInt32 r3, 1
+  getArgument r3, arg0
   initLocal local0, r3
-  getLocal r4, local0
+  getGlobalProperty r4, cp[0], ic0
   loadInt32 r5, 1
   add r6, r4, r5, profile1
   popLexicalEnvironment
   return r6
 Constant Pool:
-a: 0
+x: 0
