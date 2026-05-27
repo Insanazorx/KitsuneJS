@@ -1,5 +1,14 @@
 extension BytecodeCompiler {
     
+    enum LoopContext {
+        case forIn(BasicBlock, BasicBlock)
+        case forOf(BasicBlock, BasicBlock)
+        case forClassic(afterLoopBlock: BasicBlock, testBlock: BasicBlock, label: Int? = nil)
+        case whileClassic(afterLoopBlock: BasicBlock, testBlock: BasicBlock, label: Int? = nil)
+        case doWhile(afterLoopBlock: BasicBlock, testBlock: BasicBlock, label: Int? = nil)
+        case labelled(nodeId: Int)
+    }
+
     enum RefType {
         case local(UInt16)
         case context(UInt8, UInt16)
@@ -55,6 +64,9 @@ extension BytecodeCompiler {
         case todo
         
     }
-    
 
+    enum PropertyKeyResult {
+        case identifier(Bytecode.CPIndex)
+        case computed(Bytecode.Reg)
+    }
 }

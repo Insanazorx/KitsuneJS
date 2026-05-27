@@ -11,7 +11,7 @@ namespace JSBackend::Runtime {
     class JSFunction : public JSObject {
     public:
         using BuiltinFunction = JSValue(*)(VM& vm, JSObject* thisObj, const std::vector<JSValue>& args);
-        JSFunction (Bytecode::CodeBlock& codeBlock, Bytecode::FunctionID functionID, BuiltinFunction builtinImpl)
+        JSFunction (Bytecode::CodeBlock& codeBlock, Bytecode::FunctionID functionID, BuiltinFunction builtinImpl = nullptr)
             : m_codeBlock(codeBlock), m_functionID(functionID), m_builtinImpl(builtinImpl)
         {
             m_functionID = m_codeBlock.id;

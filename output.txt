@@ -2,78 +2,58 @@ Scope 0
 ├─ kind: global
 ├─ ownerFunction: nil
 ├─ bindings
-│  ├─ Binding 0
-│  │  ├─ name: i
-│  │  └─ kind: variable
-│  └─ Binding 1
-│     ├─ name: j
-│     └─ kind: variable
+│  └─ Binding 0
+│     ├─ name: foo
+│     └─ kind: function
 ├─ boundRefs
-│  ├─ BoundRef 12
-│  │  ├─ name: j
-│  │  ├─ kind: Read
-│  │  ├─ bindingId: 1
-│  │  ├─ captureDepth: 0
-│  │  └─ storageKind: global
-│  ├─ BoundRef 15
-│  │  ├─ name: j
-│  │  ├─ kind: Write
-│  │  ├─ bindingId: 1
-│  │  ├─ captureDepth: 0
-│  │  └─ storageKind: global
-│  └─ BoundRef 17
-│     ├─ name: j
-│     ├─ kind: Read
-│     ├─ bindingId: 1
-│     ├─ captureDepth: 0
-│     └─ storageKind: global
+│  └─ <empty>
 └─ children
    └─ Scope 1
-      ├─ kind: block
+      ├─ kind: function
       ├─ ownerFunction: nil
       ├─ bindings
       │  └─ <empty>
       ├─ boundRefs
-      │  ├─ BoundRef 22
-      │  │  ├─ name: i
-      │  │  ├─ kind: Write
-      │  │  ├─ bindingId: 0
-      │  │  ├─ captureDepth: 0
-      │  │  └─ storageKind: global
-      │  └─ BoundRef 24
-      │     ├─ name: i
-      │     ├─ kind: Read
-      │     ├─ bindingId: 0
-      │     ├─ captureDepth: 0
-      │     └─ storageKind: global
+      │  └─ <empty>
       └─ children
-         └─ <empty>
+         ├─ Scope 2
+         │  ├─ kind: param
+         │  ├─ ownerFunction: 2
+         │  ├─ bindings
+         │  │  └─ <empty>
+         │  ├─ boundRefs
+         │  │  └─ <empty>
+         │  └─ children
+         │     └─ <empty>
+         └─ Scope 3
+            ├─ kind: block
+            ├─ ownerFunction: 2
+            ├─ bindings
+            │  └─ Binding 1
+            │     ├─ name: a
+            │     └─ kind: lexical(isConst: false)
+            ├─ boundRefs
+            │  └─ BoundRef 11
+            │     ├─ name: a
+            │     ├─ kind: Read
+            │     ├─ bindingId: 1
+            │     ├─ captureDepth: 0
+            │     └─ storageKind: lexical
+            └─ children
+               └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
-Node ID: 2-> VariableDeclaration -> Scope ID: 0
-Node ID: 3-> VariableDeclarator -> Scope ID: 0
-Node ID: 4-> BindingIdentifier ("i") -> Scope ID: 0
-Node ID: 5-> Literal -> Scope ID: 0
-Node ID: 6-> ForStatement -> Scope ID: 0
-Node ID: 7-> VariableDeclaration -> Scope ID: 0
-Node ID: 8-> VariableDeclarator -> Scope ID: 0
-Node ID: 9-> BindingIdentifier ("j") -> Scope ID: 0
-Node ID: 10-> Literal -> Scope ID: 0
-Node ID: 11-> BinaryExpression -> Scope ID: 0
-Node ID: 12-> Identifier ("j") -> Scope ID: 0
-Node ID: 13-> Literal -> Scope ID: 0
-Node ID: 14-> AssignmentExpression -> Scope ID: 0
-Node ID: 15-> IdentifierAssignmentTarget ("j") -> Scope ID: 0
-Node ID: 16-> BinaryExpression -> Scope ID: 0
-Node ID: 17-> Identifier ("j") -> Scope ID: 0
-Node ID: 18-> Literal -> Scope ID: 0
-Node ID: 19-> BlockStatement -> Scope ID: 0
-Node ID: 20-> ExpressionStatement -> Scope ID: 1
-Node ID: 21-> AssignmentExpression -> Scope ID: 1
-Node ID: 22-> IdentifierAssignmentTarget ("i") -> Scope ID: 1
-Node ID: 23-> BinaryExpression -> Scope ID: 1
-Node ID: 24-> Identifier ("i") -> Scope ID: 1
-Node ID: 25-> Literal -> Scope ID: 1
+Node ID: 2-> FunctionDeclaration ("foo") -> Scope ID: 0
+Node ID: 3-> BlockStatement -> Scope ID: 1
+Node ID: 4-> DeclarationStatement -> Scope ID: 3
+Node ID: 5-> LexicalDeclaration -> Scope ID: 3
+Node ID: 6-> VariableDeclarator -> Scope ID: 3
+Node ID: 7-> BindingIdentifier ("a") -> Scope ID: 3
+Node ID: 8-> Literal -> Scope ID: 3
+Node ID: 9-> ReturnStatement -> Scope ID: 3
+Node ID: 10-> BinaryExpression -> Scope ID: 3
+Node ID: 11-> Identifier ("a") -> Scope ID: 3
+Node ID: 12-> Literal -> Scope ID: 3
 
 
 ------------------
@@ -84,35 +64,25 @@ Node ID: 25-> Literal -> Scope ID: 1
 Block 0:
   enterGlobal
   loadUndefined r0
-  initGlobalVar global1, r0
-  initGlobalVar global0, r0
-  loadInt32 r1, 3131
-  putGlobalVar global0, r1, ic0
-  loadInt32 r2, 0
-  putGlobalVar global1, r2, ic1
-  jump #bb[1]
-Block 1:
-  getGlobalVar r3, global1, ic2
-  loadInt32 r4, 3
-  lessThan r5, r3, r4, profile1
-  toBoolean r6, r5, profile2
-  jumpIf #c{jumpIfTrue r6, backpatchRef(2)} #bbtrue[2] #bbfalse[4]
-Block 2:
-  getGlobalVar r10, global0, ic5
-  loadInt32 r11, 1
-  add r12, r10, r11, profile6
-  putGlobalVar global0, r12, ic6
-  jump #bb[3]
-Block 3:
-  getGlobalVar r7, global1, ic3
-  loadInt32 r8, 1
-  add r9, r7, r8, profile4
-  putGlobalVar global1, r9, ic4
-  jump #bb[1]
-Block 4:
-
+  createFunction r1, f[0]
+  initGlobalVar global0, r1
+  createLexicalEnvironment r2, layout0
   halt
 === Global Constants Pool ===
-j: 1
-i: 0
+foo: 0
 === Function Table ===
+Function ID: FunctionID(rawValue: 0)
+CodeBlock:
+Basic Blocks:
+Block 1:
+  enterFunction
+  pushLexicalEnvironment r2
+  loadInt32 r3, 1
+  initLocal local0, r3
+  getLocal r4, local0
+  loadInt32 r5, 1
+  add r6, r4, r5, profile1
+  popLexicalEnvironment
+  return r6
+Constant Pool:
+a: 0

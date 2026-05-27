@@ -55,7 +55,7 @@ namespace JSBackend::Bytecode {
         uint32_t id {GlobalCodeBlockID};
         uint32_t startOffset {0};
         uint32_t endOffset {0};
-        Runtime::CallFrame* m_callFrame;
+        Runtime::CallFrame* m_callFrame {nullptr};
         std::vector<Instruction*> instructions;
         std::unordered_map<CPIndex, std::string> constantPool;
     };

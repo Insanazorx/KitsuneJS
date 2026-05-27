@@ -15,9 +15,9 @@ extension Terminator: CustomStringConvertible {
             return "jumpIf #c{\(condition)} #bbtrue[\(trueBlockId)] #bbfalse[\(falseBlockId)]"
         case .return(let reg):
             if let reg = reg {
-                return "return \(reg)"
+                return "return r\(reg.rawValue)"
             } else {
-                return "return"
+                return "returnUndefined"
             }
         case .throw:
             return "throw"
@@ -32,6 +32,7 @@ final class BasicBlock {
     let id: Int
     var instructions: [Bytecode] = []
     var terminator: Terminator?
+    var isSyntheticContinuation: Bool = false
     
     init(id: Int) {
         self.id = id
@@ -51,4 +52,3 @@ extension BasicBlock: CustomStringConvertible {
         return "Block \(id):\n\(instrs)\n\(termStr)"
     }
 }
-

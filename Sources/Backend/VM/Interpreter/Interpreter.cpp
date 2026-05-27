@@ -678,8 +678,28 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(switchInt) {}
     DECLARE_HANDLER(switchString) {}
 
-    DECLARE_HANDLER(returnValue) {}
-    DECLARE_HANDLER(returnUndefined) {}
+    DECLARE_HANDLER(returnValue) {
+        assert(inst->OpType() == Bytecode::Op::returnValue);
+
+        const auto valueReg = inst->value();
+        auto value = Runtime::JSValue::fromRawBits(m_registers[valueReg].read64());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout << "returnValue: returning value from register " << valueReg
+                  << " = " << value.rawBits() << "\n";
+#endif
+
+        haltInterpreter();
+    }
+    DECLARE_HANDLER(returnUndefined) {
+        assert(inst->OpType() == Bytecode::Op::returnUndefined);
+
+#ifdef DEBUG_INTERPRETER
+        std::cout << "returnUndefined: returning undefined\n";
+#endif
+
+        haltInterpreter();
+    }
     DECLARE_HANDLER(throwValue) {}
     DECLARE_HANDLER(rethrow) {}
     DECLARE_HANDLER(enterCatch) {}

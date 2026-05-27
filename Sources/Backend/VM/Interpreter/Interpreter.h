@@ -30,7 +30,11 @@ namespace JSBackend::Interpreter {
 
         Bytecode::Instruction* nextInstruction() {
             if (m_currentCodeBlock == nullptr) {
-                throw std::runtime_error("No code block is currently executing");
+                return nullptr;
+            }
+
+            if (m_instructionPointer >= m_currentCodeBlock->instructions.size()) {
+                return nullptr;
             }
             return m_currentCodeBlock->instructions.at(m_instructionPointer++);
         }

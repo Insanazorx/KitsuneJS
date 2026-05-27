@@ -1,8 +1,8 @@
-var i = 3131
-
-for (var j = 0; j < 3; j = j + 1) {
-    i = i + 1;
+function foo() {
+    let a = 1;
+    return a + 1;
 }
+
 
 
 
