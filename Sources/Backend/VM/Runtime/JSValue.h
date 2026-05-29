@@ -314,5 +314,35 @@ namespace JSBackend::Runtime {
         {
             return JSValue(bits);
         }
+        static std::string toString(const JSValue& value)
+        {
+            if (value.isUndefined()) {
+                return "undefined";
+            } else if (value.isNull()) {
+                return "null";
+            } else if (value.isBoolean()) {
+                return value.asBoolean() ? "true" : "false";
+            } else if (value.isInt32()) {
+                return std::to_string(value.asInt32());
+            } else if (value.isNumber()) {
+                return std::to_string(value.asNumber());
+            } else if (value.isString()) {
+                throw std::runtime_error("toString for strings not implemented yet");
+            } else if (value.isObject()) {
+                return "[object Object]";
+            } else if (value.isFunction()) {
+                return "[function]";
+            } else if (value.isArray()) {
+                return "[array]";
+            } else if (value.isSymbol()) {
+                return "[symbol]";
+            } else if (value.isBigInt()) {
+                return "[bigint]";
+            } else if (value.isEnvironment()) {
+                return "[environment]";
+            } else {
+                return "[unknown]";
+            }
+        };
     };
 }

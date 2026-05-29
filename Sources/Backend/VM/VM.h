@@ -23,6 +23,7 @@ namespace JSBackend {
         explicit VM(Bytecode::DecodeResult decodeResult);
         ~VM();
 
+        Interpreter::Interpreter& interpreter() { return *m_interpreter; }
         Runtime::GlobalObject* globalObject() const { return m_globalObject;}
         GarbageCollector::Heap& heap() { return m_heap; }
 

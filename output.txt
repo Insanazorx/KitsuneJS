@@ -3,46 +3,18 @@ Scope 0
 ├─ ownerFunction: nil
 ├─ bindings
 │  └─ Binding 0
-│     ├─ name: a
-│     └─ kind: variable
+│     ├─ name: obj
+│     └─ kind: lexical(isConst: false)
 ├─ boundRefs
 │  └─ <empty>
 └─ children
-   └─ Scope 1
-      ├─ kind: function
-      ├─ ownerFunction: nil
-      ├─ bindings
-      │  └─ <empty>
-      ├─ boundRefs
-      │  └─ BoundRef 9
-      │     ├─ name: x
-      │     ├─ kind: Read
-      │     ├─ bindingId: nil
-      │     ├─ captureDepth: 0
-      │     └─ storageKind: global
-      └─ children
-         └─ Scope 2
-            ├─ kind: param
-            ├─ ownerFunction: 5
-            ├─ bindings
-            │  └─ Binding 1
-            │     ├─ name: x
-            │     └─ kind: param
-            ├─ boundRefs
-            │  └─ <empty>
-            └─ children
-               └─ <empty>
+   └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
-Node ID: 2-> VariableDeclaration -> Scope ID: 0
+Node ID: 2-> LexicalDeclaration -> Scope ID: 0
 Node ID: 3-> VariableDeclarator -> Scope ID: 0
-Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
-Node ID: 5-> ArrowFunctionExpression -> Scope ID: 0
-Node ID: 6-> BindingIdentifier ("x") -> Scope ID: 2
-Node ID: 7-> ExpressionStatement -> Scope ID: 1
-Node ID: 8-> BinaryExpression -> Scope ID: 1
-Node ID: 9-> Identifier ("x") -> Scope ID: 1
-Node ID: 10-> Literal -> Scope ID: 1
+Node ID: 4-> BindingIdentifier ("obj") -> Scope ID: 0
+Node ID: 5-> ObjectLiteral -> Scope ID: 0
 
 
 ------------------
@@ -53,26 +25,9 @@ Node ID: 10-> Literal -> Scope ID: 1
 Block 0:
   enterGlobal
   loadUndefined r0
-  initGlobalVar global0, r0
-  createArrowClosure r1, f[0], r2
-  createLexicalEnvironment r2, layout0
-  putGlobalVar global0, r1, ic1
+  newObject r1
+  initGlobalLexical global0, r1
   halt
 === Global Constants Pool ===
-a: 0
+obj: 0
 === Function Table ===
-Function ID: FunctionID(rawValue: 0)
-CodeBlock:
-Basic Blocks:
-Block 1:
-  enterFunction
-  pushLexicalEnvironment r2
-  getArgument r3, arg0
-  initLocal local0, r3
-  getGlobalProperty r4, cp[0], ic0
-  loadInt32 r5, 1
-  add r6, r4, r5, profile1
-  popLexicalEnvironment
-  return r6
-Constant Pool:
-x: 0

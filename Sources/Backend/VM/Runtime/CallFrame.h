@@ -20,6 +20,8 @@ public:
         {
         }
 
+        CallFrame() = default;
+
 
         const std::vector<JSValue>& args() const {
             return m_args;
@@ -71,7 +73,7 @@ private:
     std::vector<JSValue> m_locals;
 
     // closure'a kaçan block/function lexical bindingler
-    Environment* m_capturedEnvironment;
+    Environment* m_capturedEnvironment {nullptr};
 
     JSValue m_thisValue;
     JSValue m_newTarget;

@@ -4,13 +4,13 @@
 #include <utility>
 #include <vector>
 
-#include "Bytecodes/CodeBlock.h"
-#include "Bytecodes/Decoder.h"
-#include "Bytecodes/Instruction.h"
+#include "../Bytecodes/CodeBlock.h"
+#include "../Bytecodes/Decoder.h"
+#include "../Bytecodes/Instruction.h"
 #include "Register.h"
 
 // may cause cyclic dependency:
-#include "VM.h"
+#include "../VM.h"
 
 namespace JSBackend::Interpreter {
     class Interpreter{
@@ -36,7 +36,13 @@ namespace JSBackend::Interpreter {
             if (m_instructionPointer >= m_currentCodeBlock->instructions.size()) {
                 return nullptr;
             }
+
             return m_currentCodeBlock->instructions.at(m_instructionPointer++);
+        }
+
+        void executeCodeBlock(Bytecode::CodeBlock* codeBlock) {
+            m_currentCodeBlock = codeBlock;
+            m_instructionPointer = 0;
         }
 
         void haltInterpreter() {

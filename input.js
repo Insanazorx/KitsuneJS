@@ -1,5 +1,4 @@
-var a = x => x + 1;
-
+let obj = {}
 
 
 

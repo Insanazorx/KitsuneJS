@@ -37,7 +37,7 @@ namespace JSBackend::Runtime {
 
 
     void installBuiltinFunction(std::string&& name, JSValue function) {
-
+        put(PropertyKey::identifier(std::move(name)), function);
     }
 
 

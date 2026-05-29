@@ -25,14 +25,10 @@ namespace JSBackend::Bytecode {
         {
         }
 
-        [[nodiscard]] bool isGlobal() const
+        bool isGlobal() const
         {
             return id == GlobalCodeBlockID;
         }
-
-
-
-
 
         Runtime::CallFrame* callFrame() const {
             return m_callFrame;

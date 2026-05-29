@@ -1,6 +1,7 @@
 #include "Interpreter.h"
 
 #include <cassert>
+#include <filesystem>
 #include <iostream>
 
 #include "Runtime/CallFrame.h"
@@ -47,11 +48,19 @@ namespace JSBackend::Interpreter {
         std::cout << "Entering global code block" << std::endl;
     }
     DECLARE_HANDLER(enterFunction) {}
-    DECLARE_HANDLER(move) {}
+    DECLARE_HANDLER(move) {
+        auto srcReg = inst->src();
+        auto dstReg = inst->dst();
+        registers().at(dstReg) = registers().at(srcReg);
+#ifdef DEBUG_INTERPRETER
+        std::cout << "move r" << dstReg << " = r" << srcReg << std::endl;
+#endif
+    }
     DECLARE_HANDLER(clearReg) {}
     DECLARE_HANDLER(swap) {}
     DECLARE_HANDLER(loadThis) {
         assert(inst->OpType() == Bytecode::Op::loadThis);
+        assert(m_currentCodeBlock != nullptr);
 
         auto thisValue = m_currentCodeBlock->callFrame()->thisValue();
         auto dst = inst->dst();
@@ -60,7 +69,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "loadThis: loaded this value into register "
-        << dst << " = " << m_registers[dst].read64() << "\n";
+        << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
 
 
@@ -75,7 +84,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "loadUndefined: loaded undefined value into register "
-        << dst << " = " << m_registers[dst].read64() << "\n";
+        << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(loadNull) {}
@@ -93,7 +102,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "loadInt32: loaded int32 value " << value
-        << " into register " << dst << " = " << m_registers[dst].read64() << "\n";
+        << " into register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(loadDouble) {}
@@ -127,7 +136,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "createFunction: created function object for function ID " << functionId
-        << " and stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        << " and stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(createClosure) {}
@@ -155,7 +164,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "createLexicalEnvironment: created new lexical environment and stored in register "
-        << dst << " = " << m_registers[dst].read64() << "\n";
+        << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(pushLexicalEnvironment) {}
@@ -166,9 +175,39 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(materializeScope) {}
     DECLARE_HANDLER(resolveName) {}
 
-    DECLARE_HANDLER(getGlobalLexical) {}
-    DECLARE_HANDLER(putGlobalLexical) {}
-    DECLARE_HANDLER(initGlobalLexical) {}
+    DECLARE_HANDLER(getGlobalLexical) {
+        auto dstReg = inst->dst();
+        auto slot = inst->slot();
+
+        Runtime::JSValue value = vm.globalObject()->globalEnvironment()->getBinding(slot);
+
+        m_registers[dstReg].write64(value.rawBits());
+    }
+    DECLARE_HANDLER(putGlobalLexical) {
+        auto srcReg = inst->src();
+        auto slot = inst->slot();
+
+        Runtime::JSValue value = Runtime::JSValue::fromRawBits(m_registers[srcReg].read64());
+        vm.globalObject()->globalEnvironment()->putBinding(slot, value);
+
+#ifdef DEBUG_INTERPRETER
+        std::cout << "putGlobalLexical: stored value from register " << srcReg
+        << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[srcReg].read64()))
+        << " into global lexical slot " << slot << "\n";
+#endif
+    }
+    DECLARE_HANDLER(initGlobalLexical) {
+        auto srcReg = inst->src();
+        auto slot = inst->slot();
+
+        auto value = Runtime::JSValue::fromRawBits(m_registers[srcReg].read64());
+        vm.globalObject()->globalEnvironment()->initBinding(slot, value);
+
+#ifdef DEBUG_INTERPRETER
+        std::cout << "initGlobalLexical: initialized global lexical variable at slot " << slot
+        << " with value from register " << srcReg << " = " << Runtime::JSValue::toString(value) << "\n";
+#endif
+    }
     DECLARE_HANDLER(getGlobalVar) {
         assert(inst->OpType() == Bytecode::Op::getGlobalVar);
 
@@ -181,7 +220,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "getGlobalVar: loaded global variable from slot " << slot
-        << " with value " << value.rawBits() << " into register " << dst << "\n";
+        << " with value " << Runtime::JSValue::toString(value) << " into register " << dst << "\n";
 #endif
     }
     DECLARE_HANDLER(putGlobalVar) {
@@ -195,7 +234,7 @@ namespace JSBackend::Interpreter {
         globalEnv->putBinding(slot,jsvalue);
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "putGlobalVar: stored value from register " << valueReg << " = " << jsvalue.rawBits()
+        std::cout<< "putGlobalVar: stored value from register " << valueReg << " = " << Runtime::JSValue::toString(jsvalue)
         << " into global variable slot " << slot << "\n";
 #endif
     }
@@ -211,12 +250,61 @@ namespace JSBackend::Interpreter {
 
         globalEnv->initBinding(slot,jsvalue);
     }
-    DECLARE_HANDLER(getGlobalProperty) {}
+    DECLARE_HANDLER(getGlobalProperty) {
+        assert(inst->OpType() == Bytecode::Op::getGlobalProperty);
+        assert(m_currentCodeBlock != nullptr);
+
+        auto globalObject = vm.globalObject();
+        auto propertyId = inst->name();
+        auto it = m_currentCodeBlock->constantPool.find(propertyId);
+        if (it == m_currentCodeBlock->constantPool.end()) {
+            throw std::runtime_error("Property name with ID " + std::to_string(propertyId) + " not found in constant pool");
+        }
+        auto propertyName = it->second;
+
+        auto propNameKey = Runtime::PropertyKey::identifier(propertyName);
+        auto value = globalObject->getOwnProperty(propNameKey);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(value->rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "getGlobalProperty: loaded global property '" << propertyName << "' with value " << Runtime::JSValue::toString(*value) << " into register " << dst << "\n"
+        << " into register " << dst << "\n";
+#endif
+    }
     DECLARE_HANDLER(putGlobalProperty) {}
     DECLARE_HANDLER(typeofGlobal) {}
     DECLARE_HANDLER(deleteGlobal) {}
 
-    DECLARE_HANDLER(getById) {}
+    DECLARE_HANDLER(getById) {
+        assert(inst->OpType() == Bytecode::Op::getById);
+        assert(m_currentCodeBlock != nullptr);
+
+        const auto dstReg = inst->dst();
+        const auto objectReg = inst->base();
+
+        auto objectValue = Runtime::JSValue::fromRawBits(m_registers[objectReg].read64());
+        auto propertyCPIndex = inst->name();
+
+        auto it = m_currentCodeBlock->constantPool.find(propertyCPIndex);
+        if (it == m_currentCodeBlock->constantPool.end()) {
+            throw std::runtime_error("Constant pool entry for index " + std::to_string(propertyCPIndex) + " not found");
+        }
+        auto propertyName = it->second;
+
+        auto propNameKey = Runtime::PropertyKey::identifier(propertyName);
+
+        Runtime::JSValue* value = objectValue.asObject()->getOwnProperty(propNameKey);
+
+        m_registers[dstReg].write64(value->rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "getById: loaded property '" << propertyName << "' from object in register " << objectReg
+        << " with value " << Runtime::JSValue::toString(*value) << " into register " << dstReg << "\n";
+#endif
+
+    }
     DECLARE_HANDLER(putById) {}
     DECLARE_HANDLER(getByVal) {}
     DECLARE_HANDLER(putByVal) {}
@@ -265,8 +353,8 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(Runtime::JSValue::boolean(boolValue).rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "toBoolean: converted value in register " << srcReg << " = " << value.rawBits()
-        << " to boolean " << boolValue << " and stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "toBoolean: converted value in register " << srcReg << " = " << Runtime::JSValue::toString(value)
+        << " to boolean " << boolValue << " and stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(toPropertyKey) {}
@@ -277,7 +365,24 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(logicalNot) {}
     DECLARE_HANDLER(bitNot) {}
     DECLARE_HANDLER(negate) {}
-    DECLARE_HANDLER(increment) {}
+    DECLARE_HANDLER(increment) {
+        assert(inst->OpType() == Bytecode::Op::increment);
+
+        const auto srcReg = inst->src();
+        const auto dstReg = inst->dst();
+
+        auto value = Runtime::JSValue::fromRawBits(m_registers[srcReg].read64());
+
+        double numValue = value.asNumber();
+        numValue += 1;
+
+        m_registers[dstReg].write64(Runtime::JSValue::number(numValue).rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "increment: incremented value in register " << srcReg << " = " << Runtime::JSValue::toString(value)
+        << " to " << numValue << " and stored in register " << dstReg << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dstReg].read64())) << "\n";
+#endif
+    }
     DECLARE_HANDLER(decrement) {}
 
     DECLARE_HANDLER(add) {
@@ -294,8 +399,8 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(result.rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "add: added values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
+        std::cout<< "add: added values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
         << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
 #endif
     }
@@ -313,9 +418,9 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(result.rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "sub: subtracted values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "sub: subtracted values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(mul) {
@@ -345,9 +450,9 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(result.rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "div: divided values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "div: divided values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(mod) {
@@ -364,9 +469,9 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(result.rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "mod: calculated modulus of values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber()
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "mod: modulus of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(pow) {}
@@ -383,8 +488,9 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "bitAnd: performed bitwise AND on values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+         std::cout<< "bitAnd: bitwise AND of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+          << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+          << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(bitOr) {
@@ -400,8 +506,11 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "bitOr: performed bitwise OR on values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+
+            std::cout<< "bitOr: bitwise OR of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+            << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+            << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
+
 #endif
     }
     DECLARE_HANDLER(bitXor) {
@@ -417,8 +526,9 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "bitXor: performed bitwise XOR on values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "bitXor: bitwise XOR of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(leftShift) {
@@ -434,8 +544,9 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "leftShift: performed left shift on values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "leftShift: left shift of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(rightShift) {
@@ -451,8 +562,9 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "rightShift: performed right shift on values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "rightShift: right shift of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(unsignedRightShift) {
@@ -468,9 +580,9 @@ namespace JSBackend::Interpreter {
 
         m_registers[dst].write64(result.rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "unsignedRightShift: performed unsigned right shift on values in registers "
-        << leftReg << " = " << leftValue.rawBits() << " and " << rightReg << " = " << rightValue.rawBits()
-        << ", result is " << result.asNumber() << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "unsignedRightShift: unsigned right shift of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(equal) {
@@ -486,9 +598,9 @@ namespace JSBackend::Interpreter {
         const auto dst = inst->dst();
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "equal: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "equal: equality comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(notEqual) {
@@ -504,9 +616,9 @@ namespace JSBackend::Interpreter {
         const auto dst = inst->dst();
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "notEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "notEqual: inequality comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(strictEqual) {}
@@ -525,9 +637,9 @@ namespace JSBackend::Interpreter {
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "lessThan: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "lessThan: less-than comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(lessThanOrEqual) {
@@ -543,9 +655,9 @@ namespace JSBackend::Interpreter {
         const auto dst = inst->dst();
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "lessThanOrEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "lessThanOrEqual: less-than-or-equal comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(greaterThan) {
@@ -561,9 +673,9 @@ namespace JSBackend::Interpreter {
         const auto dst = inst->dst();
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "greaterThan: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "greaterThan: greater-than comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(greaterThanOrEqual) {
@@ -579,9 +691,9 @@ namespace JSBackend::Interpreter {
         const auto dst = inst->dst();
         m_registers[dst].write64(Runtime::JSValue::boolean(result).rawBits());
 #ifdef DEBUG_INTERPRETER
-        std::cout<< "greaterThanOrEqual: compared values in registers " << leftReg << " = " << leftValue.rawBits()
-        << " and " << rightReg << " = " << rightValue.rawBits() << ", result is " << result
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        std::cout<< "greaterThanOrEqual: greater-than-or-equal comparison of values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << (result ? "true" : "false")
+        << " stored in register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
     DECLARE_HANDLER(sameValue) {}
@@ -602,14 +714,33 @@ namespace JSBackend::Interpreter {
 
             Runtime::JSFunction* functionObject = functionValue.asFunction();
 
+            auto thisReg = inst->thisValue();
+            auto thisValue = Runtime::JSValue::fromRawBits(m_registers[thisReg].read64());
+
+            auto argCount = inst->argc();
+
+            std::vector<Runtime::JSValue> arguments;
+            std::cout << "-----------args------------\n";
+            for (size_t i = 0; i < argCount; ++i) {
+                const auto argReg = inst->argsBase() + i;
+                auto argValue = Runtime::JSValue::fromRawBits(m_registers[argReg].read64());
+                std::cout <<"[*] Arg" << i <<" => " << Runtime::JSValue::toString(argValue) << "| rawBits => " << argValue.rawBits() << "\n";
+                arguments.push_back(argValue);
+            }
+            std::cout << "---------------------------\n";
+
             std::cout << "Calling function with ID " << functionObject->functionID() << std::endl;
+            functionObject->call(vm, thisValue.asObject(), arguments);
+
+
 
             // For now, we will just return undefined for any function call
             m_registers[inst->dst()].write64(Runtime::JSValue::undefined().rawBits());
 
 #ifdef DEBUG_INTERPRETER
-            std::cout<< "call: called function in register " << functionReg << " = " << functionValue.rawBits()
-            << ", result stored in register " << inst->dst() << " = " << m_registers[inst->dst()].read64() << "\n";
+            std::cout << "call: called function in register " << functionReg << " with this value in register " << thisReg
+            << " and " << argCount << " arguments, result stored in register " << inst->dst() << " = "
+            << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[inst->dst()].read64())) << "\n";
 #endif
 
     }
@@ -686,7 +817,7 @@ namespace JSBackend::Interpreter {
 
 #ifdef DEBUG_INTERPRETER
         std::cout << "returnValue: returning value from register " << valueReg
-                  << " = " << value.rawBits() << "\n";
+                  << " = " << Runtime::JSValue::toString(value) << "\n";
 #endif
 
         haltInterpreter();

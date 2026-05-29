@@ -4,10 +4,12 @@
 #include <iostream>
 
 namespace JSBackend::Runtime {
-    inline JSValue LogBuiltin(VM& vm, JSObject* thisObj, const std::vector<JSValue>& args) {
+    JSValue LogBuiltin(VM& vm, JSObject* thisObj, const std::vector<JSValue>& args) {
         std::cout << "[Console.log] ";
-        for (const auto& arg : args) {
-            if (arg.isInt32()) {
+        for (const auto arg : args) {
+            if (arg.isNumber()){
+                std::cout << arg.asNumber() << " ";
+            } else if (arg.isInt32()) {
                 std::cout << arg.asInt32() << " ";
             } else if (arg.isBoolean()) {
                 std::cout << (arg.asBoolean() ? "true" : "false") << " ";
@@ -19,7 +21,7 @@ namespace JSBackend::Runtime {
                 auto cell = arg.asCell();
                 switch (cell->kind()) {
                     case JSCell::Kind::String:
-                        std::cout << "[string] ";//JSString not implemented yetü
+                        std::cout << "[string] ";//JSString not implemented yet
                         //std::cout << static_cast<JSString*>(cell)->value() << " ";
                         break;
                     case JSCell::Kind::Object:

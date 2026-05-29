@@ -5,7 +5,10 @@
 #include "Runtime/GlobalObject.h"
 
 //may cause cyclic dependency:
+#include "Runtime/CallFrame.h"
+#include "Runtime/ConsoleObject.h"
 #include "Runtime/Environment.h"
+#include "Runtime/JSFunction.h"
 
 namespace JSBackend {
     VM::VM(Bytecode::DecodeResult decodeResult)
@@ -16,8 +19,17 @@ namespace JSBackend {
 
     void VM::initialize()
     {
-        m_globalObject = m_heap.allocate<Runtime::GlobalObject>();
-        m_globalObject->setGlobalEnvironment(m_heap.allocate<Runtime::Environment>());
+        m_globalObject = m_heap.allocate<Runtime::GlobalObject>(this);
+        auto globalObjJSValue = Runtime::JSValue::cell(m_globalObject);
+
+        m_interpreter->globalCodeBlock().set_callFrame(new Runtime::CallFrame());
+
+        m_interpreter->globalCodeBlock().callFrame()->set_thisValue(globalObjJSValue);
+
+        if (!m_globalObject) {
+            throw std::runtime_error("Failed to allocate GlobalObject");
+        }
+
 
     }
 
