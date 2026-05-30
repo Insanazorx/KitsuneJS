@@ -41,8 +41,26 @@ namespace JSBackend::Interpreter {
         }
 
         void executeCodeBlock(Bytecode::CodeBlock* codeBlock) {
+            if (m_currentCodeBlock != nullptr) {
+                m_executionStack.push_back({
+                    m_currentCodeBlock,
+                    m_instructionPointer
+                });
+            }
             m_currentCodeBlock = codeBlock;
             m_instructionPointer = 0;
+        }
+
+        void returnToCallerCodeBlock() {
+            if (m_executionStack.empty()) {
+                haltInterpreter();
+                return;
+            }
+
+            auto callerState = m_executionStack.back();
+            m_executionStack.pop_back();
+            m_currentCodeBlock = callerState.codeBlock;
+            m_instructionPointer = callerState.instructionPointer;
         }
 
         void haltInterpreter() {
@@ -78,11 +96,38 @@ namespace JSBackend::Interpreter {
             return m_globalCodeBlock;
         }
     private:
+        Bytecode::JumpOffset instructionIndexForOffset(Bytecode::JumpOffset targetOffset) const {
+            if (m_currentCodeBlock == nullptr) {
+                throw std::runtime_error("Cannot resolve jump target without a current code block");
+            }
+            if (targetOffset < 0) {
+                throw std::runtime_error("Invalid negative jump target offset: " + std::to_string(targetOffset));
+            }
+
+            const auto absoluteTargetOffset = static_cast<uint32_t>(targetOffset);
+            for (size_t index = 0; index < m_currentCodeBlock->instructions.size(); ++index) {
+                if (m_currentCodeBlock->instructions[index]->offset() == absoluteTargetOffset) {
+                    return static_cast<Bytecode::JumpOffset>(index);
+                }
+            }
+
+            throw std::runtime_error(
+                "Invalid jump target offset " + std::to_string(targetOffset)
+                + " for current code block starting at "
+                + std::to_string(m_currentCodeBlock->startOffset)
+            );
+        }
+
         VM& vm;
         std::vector<Register> m_registers; // Initialize 256 registers
 
         Bytecode::CodeBlock* m_currentCodeBlock {nullptr};
         Bytecode::JumpOffset m_instructionPointer {0};
+        struct ExecutionState {
+            Bytecode::CodeBlock* codeBlock {nullptr};
+            Bytecode::JumpOffset instructionPointer {0};
+        };
+        std::vector<ExecutionState> m_executionStack;
 
         std::unordered_map<uint32_t, uint32_t> m_offsetToLogicalAddress;
         std::unordered_map<Bytecode::FunctionID, uint32_t> m_functionTable;

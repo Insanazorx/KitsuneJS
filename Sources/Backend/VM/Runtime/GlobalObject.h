@@ -17,6 +17,8 @@ namespace JSBackend::Runtime {
 
         Environment* globalEnvironment() {return m_globalEnvironment;}
         void setGlobalEnvironment(Environment* env) { m_globalEnvironment = env; }
+
+
         JSObject* consoleObject () const { return m_consoleObject; }
         void setConsoleObject(JSObject* console) { m_consoleObject = console; }
 

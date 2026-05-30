@@ -22,6 +22,12 @@ public:
 
         CallFrame() = default;
 
+        JSValue argumentBySlot (Bytecode::ArgSlot index) const {
+            if (index < m_args.size()) {
+                return m_args[index];
+            }
+            return JSValue::undefined();
+        }
 
         const std::vector<JSValue>& args() const {
             return m_args;
@@ -67,6 +73,14 @@ public:
             m_newTarget = m_new_target;
         }
 
+        void set_callInstDstReg(Bytecode::Reg dstReg) {
+            m_callInstDstReg = dstReg;
+        }
+
+        Bytecode::Reg callInstDstReg() const {
+            return m_callInstDstReg;
+        }
+
 private:
     std::vector<JSValue> m_args;
         // function local / var / param gibi hızlı şeyler
@@ -77,5 +91,7 @@ private:
 
     JSValue m_thisValue;
     JSValue m_newTarget;
+
+    Bytecode::Reg m_callInstDstReg {0xFFFF};
 };
 }

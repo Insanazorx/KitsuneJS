@@ -10,7 +10,9 @@ namespace JSBackend::Runtime {
         Environment() {
             m_bindings.resize(16, JSValue::undefined());
         };
-        virtual ~Environment() = default;
+        ~Environment() override = default;
+        Kind kind() const override { return Kind::Environment; }
+
         void resizeBindings(uint16_t newSize) {
             auto oldBindings = m_bindings;
             m_bindings.resize(newSize, JSValue::undefined());
@@ -34,6 +36,9 @@ namespace JSBackend::Runtime {
             assert(slot < m_bindings.size() && "getBinding slot out of bounds");
             return m_bindings[slot];
         }
+
+        void setOuter(Environment* outer) { m_outer = outer; }
+        Environment* outer() const { return m_outer; }
     private:
         std::vector<JSValue> m_bindings;
         Environment* m_outer {nullptr};

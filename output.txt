@@ -2,19 +2,184 @@ Scope 0
 ├─ kind: global
 ├─ ownerFunction: nil
 ├─ bindings
-│  └─ Binding 0
-│     ├─ name: obj
-│     └─ kind: lexical(isConst: false)
+│  ├─ Binding 0
+│  │  ├─ name: a
+│  │  └─ kind: variable
+│  └─ Binding 1
+│     ├─ name: foo
+│     └─ kind: function
 ├─ boundRefs
-│  └─ <empty>
+│  ├─ BoundRef 43
+│  │  ├─ name: console
+│  │  ├─ kind: Read
+│  │  ├─ bindingId: nil
+│  │  ├─ captureDepth: 0
+│  │  └─ storageKind: unknown
+│  ├─ BoundRef 46
+│  │  ├─ name: foo
+│  │  ├─ kind: Read
+│  │  ├─ bindingId: 1
+│  │  ├─ captureDepth: 0
+│  │  └─ storageKind: global
+│  └─ BoundRef 47
+│     ├─ name: a
+│     ├─ kind: Read
+│     ├─ bindingId: 0
+│     ├─ captureDepth: 0
+│     └─ storageKind: global
 └─ children
-   └─ <empty>
+   └─ Scope 1
+      ├─ kind: function
+      ├─ ownerFunction: nil
+      ├─ bindings
+      │  └─ <empty>
+      ├─ boundRefs
+      │  └─ <empty>
+      └─ children
+         ├─ Scope 2
+         │  ├─ kind: param
+         │  ├─ ownerFunction: 7
+         │  ├─ bindings
+         │  │  └─ Binding 2
+         │  │     ├─ name: n
+         │  │     └─ kind: param
+         │  ├─ boundRefs
+         │  │  └─ <empty>
+         │  └─ children
+         │     └─ <empty>
+         └─ Scope 3
+            ├─ kind: block
+            ├─ ownerFunction: 7
+            ├─ bindings
+            │  └─ <empty>
+            ├─ boundRefs
+            │  ├─ BoundRef 12
+            │  │  ├─ name: n
+            │  │  ├─ kind: Read
+            │  │  ├─ bindingId: 2
+            │  │  ├─ captureDepth: 0
+            │  │  └─ storageKind: lexical
+            │  └─ BoundRef 39
+            │     ├─ name: n
+            │     ├─ kind: Read
+            │     ├─ bindingId: 2
+            │     ├─ captureDepth: 0
+            │     └─ storageKind: lexical
+            └─ children
+               └─ Scope 4
+                  ├─ kind: block
+                  ├─ ownerFunction: 7
+                  ├─ bindings
+                  │  └─ <empty>
+                  ├─ boundRefs
+                  │  └─ BoundRef 17
+                  │     ├─ name: n
+                  │     ├─ kind: Read
+                  │     ├─ bindingId: 2
+                  │     ├─ captureDepth: 0
+                  │     └─ storageKind: lexical
+                  └─ children
+                     ├─ Scope 5
+                     │  ├─ kind: block
+                     │  ├─ ownerFunction: 7
+                     │  ├─ bindings
+                     │  │  └─ <empty>
+                     │  ├─ boundRefs
+                     │  │  └─ BoundRef 22
+                     │  │     ├─ name: n
+                     │  │     ├─ kind: Read
+                     │  │     ├─ bindingId: 2
+                     │  │     ├─ captureDepth: 0
+                     │  │     └─ storageKind: lexical
+                     │  └─ children
+                     │     └─ Scope 6
+                     │        ├─ kind: block
+                     │        ├─ ownerFunction: 7
+                     │        ├─ bindings
+                     │        │  └─ <empty>
+                     │        ├─ boundRefs
+                     │        │  ├─ BoundRef 27
+                     │        │  │  ├─ name: n
+                     │        │  │  ├─ kind: Write
+                     │        │  │  ├─ bindingId: 2
+                     │        │  │  ├─ captureDepth: 0
+                     │        │  │  └─ storageKind: lexical
+                     │        │  └─ BoundRef 29
+                     │        │     ├─ name: n
+                     │        │     ├─ kind: Read
+                     │        │     ├─ bindingId: 2
+                     │        │     ├─ captureDepth: 0
+                     │        │     └─ storageKind: lexical
+                     │        └─ children
+                     │           └─ <empty>
+                     └─ Scope 7
+                        ├─ kind: block
+                        ├─ ownerFunction: 7
+                        ├─ bindings
+                        │  └─ <empty>
+                        ├─ boundRefs
+                        │  ├─ BoundRef 34
+                        │  │  ├─ name: n
+                        │  │  ├─ kind: Write
+                        │  │  ├─ bindingId: 2
+                        │  │  ├─ captureDepth: 0
+                        │  │  └─ storageKind: lexical
+                        │  └─ BoundRef 36
+                        │     ├─ name: n
+                        │     ├─ kind: Read
+                        │     ├─ bindingId: 2
+                        │     ├─ captureDepth: 0
+                        │     └─ storageKind: lexical
+                        └─ children
+                           └─ <empty>
 Node ID: 0-> Program -> Scope ID: 0
 Node ID: 1-> DeclarationStatement -> Scope ID: 0
-Node ID: 2-> LexicalDeclaration -> Scope ID: 0
+Node ID: 2-> VariableDeclaration -> Scope ID: 0
 Node ID: 3-> VariableDeclarator -> Scope ID: 0
-Node ID: 4-> BindingIdentifier ("obj") -> Scope ID: 0
-Node ID: 5-> ObjectLiteral -> Scope ID: 0
+Node ID: 4-> BindingIdentifier ("a") -> Scope ID: 0
+Node ID: 5-> Literal -> Scope ID: 0
+Node ID: 6-> DeclarationStatement -> Scope ID: 0
+Node ID: 7-> FunctionDeclaration ("foo") -> Scope ID: 0
+Node ID: 8-> BindingIdentifier ("n") -> Scope ID: 2
+Node ID: 9-> BlockStatement -> Scope ID: 1
+Node ID: 10-> WhileStatement -> Scope ID: 3
+Node ID: 11-> BinaryExpression -> Scope ID: 3
+Node ID: 12-> Identifier ("n") -> Scope ID: 3
+Node ID: 13-> Literal -> Scope ID: 3
+Node ID: 14-> BlockStatement -> Scope ID: 3
+Node ID: 15-> IfStatement -> Scope ID: 4
+Node ID: 16-> BinaryExpression -> Scope ID: 4
+Node ID: 17-> Identifier ("n") -> Scope ID: 4
+Node ID: 18-> Literal -> Scope ID: 4
+Node ID: 19-> BlockStatement -> Scope ID: 4
+Node ID: 20-> WhileStatement -> Scope ID: 5
+Node ID: 21-> BinaryExpression -> Scope ID: 5
+Node ID: 22-> Identifier ("n") -> Scope ID: 5
+Node ID: 23-> Literal -> Scope ID: 5
+Node ID: 24-> BlockStatement -> Scope ID: 5
+Node ID: 25-> ExpressionStatement -> Scope ID: 6
+Node ID: 26-> AssignmentExpression -> Scope ID: 6
+Node ID: 27-> IdentifierAssignmentTarget ("n") -> Scope ID: 6
+Node ID: 28-> BinaryExpression -> Scope ID: 6
+Node ID: 29-> Identifier ("n") -> Scope ID: 6
+Node ID: 30-> Literal -> Scope ID: 6
+Node ID: 31-> BlockStatement -> Scope ID: 4
+Node ID: 32-> ExpressionStatement -> Scope ID: 7
+Node ID: 33-> AssignmentExpression -> Scope ID: 7
+Node ID: 34-> IdentifierAssignmentTarget ("n") -> Scope ID: 7
+Node ID: 35-> BinaryExpression -> Scope ID: 7
+Node ID: 36-> Identifier ("n") -> Scope ID: 7
+Node ID: 37-> Literal -> Scope ID: 7
+Node ID: 38-> ReturnStatement -> Scope ID: 3
+Node ID: 39-> Identifier ("n") -> Scope ID: 3
+Node ID: 40-> ExpressionStatement -> Scope ID: 0
+Node ID: 41-> CallExpression -> Scope ID: 0
+Node ID: 42-> MemberExpression -> Scope ID: 0
+Node ID: 43-> Identifier ("console") -> Scope ID: 0
+Node ID: 44-> Identifier ("log") -> Scope ID: 0
+Node ID: 45-> CallExpression -> Scope ID: 0
+Node ID: 46-> Identifier ("foo") -> Scope ID: 0
+Node ID: 47-> Identifier ("a") -> Scope ID: 0
 
 
 ------------------
@@ -25,9 +190,80 @@ Node ID: 5-> ObjectLiteral -> Scope ID: 0
 Block 0:
   enterGlobal
   loadUndefined r0
-  newObject r1
-  initGlobalLexical global0, r1
+  createFunction r2, f[0]
+  initGlobalVar global1, r2
+  createLexicalEnvironment r3, layout0
+  initGlobalVar global0, r0
+  loadInt32 r1, 10
+  putGlobalVar global0, r1, ic0
+  getGlobalProperty r24, cp[2], ic1
+  getById r25, r24, cp[3], ic2
+  getGlobalVar r26, global1, ic3
+  getGlobalVar r27, global0, ic4
+  move r28, r27
+  loadThis r30
+  call r29, r26, this r30, args r28, argc 1, call0
+  move r31, r29
+  loadThis r33
+  call r32, r25, this r33, args r31, argc 1, call1
   halt
 === Global Constants Pool ===
-obj: 0
+console: 2
+a: 0
+log: 3
+foo: 1
 === Function Table ===
+Function ID: FunctionID(rawValue: 0)
+CodeBlock:
+Basic Blocks:
+Block 1:
+  enterFunction
+  pushLexicalEnvironment r3
+  getArgument r4, arg0
+  initLocal local0, r4
+  jump #bb[2]
+Block 2:
+  getLocal r5, local0
+  loadInt32 r6, 132
+  lessThan r7, r5, r6, profile1
+  toBoolean r8, r7, profile2
+  jumpIf #c{jumpIfTrue r8, backpatchRef(3)} #bbtrue[3] #bbfalse[4]
+Block 3:
+  getLocal r9, local0
+  loadInt32 r10, 20
+  lessThanOrEqual r11, r9, r10, profile4
+  toBoolean r12, r11, profile5
+  jumpIf #c{jumpIfTrue r12, backpatchRef(5)} #bbtrue[5] #bbfalse[6]
+Block 4:
+  getLocal r23, local0
+  popLexicalEnvironment
+  return r23
+Block 5:
+
+  jump #bb[8]
+Block 6:
+  getLocal r20, local0
+  loadInt32 r21, 2
+  mul r22, r20, r21, profile12
+  putLocal local0, r22
+  <no terminator>
+Block 7:
+
+  jump #bb[2]
+Block 8:
+  getLocal r13, local0
+  loadInt32 r14, 20
+  lessThanOrEqual r15, r13, r14, profile7
+  toBoolean r16, r15, profile8
+  jumpIf #c{jumpIfTrue r16, backpatchRef(9)} #bbtrue[9] #bbfalse[10]
+Block 9:
+  getLocal r17, local0
+  loadInt32 r18, 1
+  add r19, r17, r18, profile10
+  putLocal local0, r19
+  jump #bb[8]
+Block 10:
+
+  jump #bb[7]
+Constant Pool:
+n: 0

@@ -146,11 +146,51 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(createClass) {}
     DECLARE_HANDLER(setHomeObject) {}
 
-    DECLARE_HANDLER(getArgument) {}
+    DECLARE_HANDLER(getArgument) {
+        assert (inst->OpType() == Bytecode::Op::getArgument);
+
+        auto callFrame = m_currentCodeBlock->callFrame();
+        auto argSlot = inst->slot();
+
+        auto dst = inst->dst();
+        auto argValue = callFrame->argumentBySlot(argSlot);
+        m_registers[dst].write64(argValue.rawBits());
+
+    }
     DECLARE_HANDLER(putArgument) {}
-    DECLARE_HANDLER(getLocal) {}
-    DECLARE_HANDLER(putLocal) {}
-    DECLARE_HANDLER(initLocal) {}
+    DECLARE_HANDLER(getLocal) {
+        assert (inst->OpType() == Bytecode::Op::getLocal);
+
+        //for now, we get locals from current environment in vm
+        auto localSlot = inst->slot();
+        auto dst = inst->dst();
+        auto localValue = vm.currentEnvironment()->getBinding(localSlot);
+
+        m_registers[dst].write64(localValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "getLocal: loaded local variable from slot " << localSlot
+        << " into register " << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
+#endif
+    }
+    DECLARE_HANDLER(putLocal) {
+        assert (inst->OpType() == Bytecode::Op::putLocal);
+
+        //for now, we put locals into current environment in vm
+        auto localSlot = inst->slot();
+        auto src = inst->src();
+        auto value = Runtime::JSValue::fromRawBits(m_registers[src].read64());
+        vm.currentEnvironment()->putBinding(localSlot, value);
+    }
+    DECLARE_HANDLER(initLocal) {
+        assert (inst->OpType() == Bytecode::Op::initLocal);
+
+        //for now, we initialize locals in current environment in vm
+        auto localSlot = inst->slot();
+        auto src = inst->src();
+        auto value = Runtime::JSValue::fromRawBits(m_registers[src].read64());
+        vm.currentEnvironment()->initBinding(localSlot, value);
+    }
     DECLARE_HANDLER(checkTDZLocal) {}
 
     DECLARE_HANDLER(createLexicalEnvironment) {
@@ -167,8 +207,31 @@ namespace JSBackend::Interpreter {
         << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
 #endif
     }
-    DECLARE_HANDLER(pushLexicalEnvironment) {}
-    DECLARE_HANDLER(popLexicalEnvironment) {}
+    DECLARE_HANDLER(pushLexicalEnvironment) {
+        assert(inst->OpType() == Bytecode::Op::pushLexicalEnvironment);
+
+        auto envValue = Runtime::JSValue::fromRawBits(m_registers[inst->environment()].read64());
+        auto env = envValue.asEnvironment();
+        env->setOuter(vm.currentEnvironment());
+        vm.setCurrentEnvironment(env);
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "pushLexicalEnvironment: pushed new lexical environment onto stack, current environment is now " << Runtime::JSValue::toString(envValue) << "\n";
+#endif
+    }
+    DECLARE_HANDLER(popLexicalEnvironment) {
+        assert(inst->OpType() == Bytecode::Op::popLexicalEnvironment);
+
+        auto currentEnv = vm.currentEnvironment();
+        if (currentEnv == nullptr) {
+            throw std::runtime_error("No current environment to pop");
+        }
+        auto outerEnv = currentEnv->outer();
+        vm.setCurrentEnvironment(outerEnv);
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "popLexicalEnvironment: popped current lexical environment, current environment is now " << (outerEnv ? Runtime::JSValue::toString(Runtime::JSValue::cell(outerEnv)) : "null") << "\n";
+#endif
+    }
     DECLARE_HANDLER(getContext) {}
     DECLARE_HANDLER(putContext) {}
     DECLARE_HANDLER(checkTDZContext) {}
@@ -702,7 +765,7 @@ namespace JSBackend::Interpreter {
     DECLARE_HANDLER(inOperator) {}
 
     DECLARE_HANDLER(call) {
-        //TODO: implement call handler:
+
             assert(inst->OpType() == Bytecode::Op::call);
 
             const auto functionReg = inst->callee();
@@ -730,12 +793,8 @@ namespace JSBackend::Interpreter {
             std::cout << "---------------------------\n";
 
             std::cout << "Calling function with ID " << functionObject->functionID() << std::endl;
-            functionObject->call(vm, thisValue.asObject(), arguments);
-
-
-
-            // For now, we will just return undefined for any function call
-            m_registers[inst->dst()].write64(Runtime::JSValue::undefined().rawBits());
+            auto returnValue = functionObject->call(vm, thisValue.asObject(), arguments, inst->dst());
+            m_registers[inst->dst()].write64(returnValue.rawBits());
 
 #ifdef DEBUG_INTERPRETER
             std::cout << "call: called function in register " << functionReg << " with this value in register " << thisReg
@@ -761,17 +820,13 @@ namespace JSBackend::Interpreter {
         //for only debug:
         auto oldLogicalAddress = m_instructionPointer;
 
-        auto it = m_offsetToLogicalAddress.find(targetOffset);
-        if (it == m_offsetToLogicalAddress.end()) {
-            throw std::runtime_error("Invalid jump target offset: " + std::to_string(targetOffset));
-        }
-        auto targetLogicalAddress = it->second;
+        auto targetLogicalAddress = instructionIndexForOffset(targetOffset);
 
-        std::cout << "Jumping from logical address " << std::hex <<oldLogicalAddress << " to "<< std::hex << targetLogicalAddress << std::endl;
+        std::cout << "Jumping from logical address " << oldLogicalAddress << " to " << targetLogicalAddress << std::endl;
 
         m_instructionPointer = targetLogicalAddress;
 
-        std::cout << "New instruction pointer is " << std::hex << m_instructionPointer << std::endl;
+        std::cout << "New instruction pointer is " << m_instructionPointer << std::endl;
     }
     DECLARE_HANDLER(jumpIfTrue) {
         assert(inst->OpType() == Bytecode::Op::jumpIfTrue);
@@ -787,13 +842,9 @@ namespace JSBackend::Interpreter {
         if (conditionValue.asBoolean()) {
             auto targetOffset = inst->offset();
 
-            auto it = m_offsetToLogicalAddress.find(targetOffset);
-            if (it == m_offsetToLogicalAddress.end()) {
-                throw std::runtime_error("Invalid jump target offset: " + std::to_string(targetOffset));
-            }
-            auto targetLogicalAddress = it->second;
+            auto targetLogicalAddress = instructionIndexForOffset(targetOffset);
 
-            std::cout << "Condition is true, jumping to logical address " << std::hex << targetLogicalAddress << std::endl;
+            std::cout << "Condition is true, jumping to logical address " << targetLogicalAddress << std::endl;
 
             m_instructionPointer = targetLogicalAddress;
         } else {
@@ -815,21 +866,45 @@ namespace JSBackend::Interpreter {
         const auto valueReg = inst->value();
         auto value = Runtime::JSValue::fromRawBits(m_registers[valueReg].read64());
 
-#ifdef DEBUG_INTERPRETER
-        std::cout << "returnValue: returning value from register " << valueReg
-                  << " = " << Runtime::JSValue::toString(value) << "\n";
-#endif
+        auto lastCallFrame = vm.currentCallFrame();
+        if (!lastCallFrame) {
+            throw std::runtime_error("No call frame available for returnValue");
+        }
 
-        haltInterpreter();
+        auto dstReg = lastCallFrame->callInstDstReg();
+        if (dstReg == 0xFFFF) {
+            throw std::runtime_error("Invalid call instruction destination register for returnValue");
+        }
+
+        m_registers[dstReg].write64(value.rawBits());
+        vm.popCallFrame();
+        returnToCallerCodeBlock();
+
+#ifdef DEBUG_INTERPRETER
+        std::cout << "returnValue: returning value in register " << valueReg
+        <<" = " << Runtime::JSValue::toString(value) << " to caller, stored in register " << dstReg << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dstReg].read64())) << "\n";
+#endif
     }
+
     DECLARE_HANDLER(returnUndefined) {
         assert(inst->OpType() == Bytecode::Op::returnUndefined);
+
+        auto lastCallFrame = vm.currentCallFrame();
+        if (!lastCallFrame) {
+            throw std::runtime_error("No call frame available for returnUndefined");
+        }
+        auto dstReg = lastCallFrame->callInstDstReg();
+        if (dstReg == 0xFFFF) {
+            throw std::runtime_error("Invalid call instruction destination register for returnUndefined");
+        }
+        m_registers[dstReg].write64(Runtime::JSValue::undefined().rawBits());
+        vm.popCallFrame();
+        returnToCallerCodeBlock();
 
 #ifdef DEBUG_INTERPRETER
         std::cout << "returnUndefined: returning undefined\n";
 #endif
 
-        haltInterpreter();
     }
     DECLARE_HANDLER(throwValue) {}
     DECLARE_HANDLER(rethrow) {}

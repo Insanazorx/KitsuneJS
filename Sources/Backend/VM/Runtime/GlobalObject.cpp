@@ -13,6 +13,9 @@ namespace JSBackend::Runtime {
             throw std::runtime_error("Failed to allocate global environment");
         }
 
+        vm->setCurrentEnvironment(globalEnvironment());
+
+
         setConsoleObject(vm->heap().allocate<JSObject>());
 
         if (!consoleObject()) {

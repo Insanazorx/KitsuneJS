@@ -30,7 +30,7 @@ namespace JSBackend::Runtime {
         Kind kind() const override { return Kind::Function; }
 
 
-        JSValue call(VM& vm, JSObject* thisObj, const std::vector<JSValue>& args) {
+        JSValue call(VM& vm, JSObject* thisObj, const std::vector<JSValue>& args, Bytecode::Reg returnDstReg) {
             if (m_builtinImpl) {
                 return m_builtinImpl(vm, thisObj, args);
             }
@@ -44,11 +44,16 @@ namespace JSBackend::Runtime {
                 thisValue,
                 JSValue::undefined());
 
+            callFrame->set_callInstDstReg(returnDstReg);
             m_codeBlock.set_callFrame(callFrame);
+
+            vm.pushCallFrame(callFrame);
             vm.interpreter().executeCodeBlock(&m_codeBlock);
 
             return JSValue::undefined();
         }
+
+
 
         Bytecode::FunctionID functionID() const { return m_functionID; }
 

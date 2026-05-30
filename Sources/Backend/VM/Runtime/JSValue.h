@@ -14,7 +14,7 @@ namespace JSBackend::Runtime {
     class JSArray;
     class JSSymbol;
     class JSBigInt;
-    class JSEnvironment;
+    class Environment;
 
     class JSValue {
     public:
@@ -299,10 +299,10 @@ namespace JSBackend::Runtime {
             return reinterpret_cast<JSBigInt*>(asCell());
         }
 
-        JSEnvironment* asEnvironment() const
+        Environment* asEnvironment() const
         {
             assert(isEnvironment());
-            return reinterpret_cast<JSEnvironment*>(asCell());
+            return reinterpret_cast<Environment*>(asCell());
         }
 
         uint64_t rawBits() const
