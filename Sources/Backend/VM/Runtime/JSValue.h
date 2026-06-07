@@ -3,6 +3,9 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <string>
+
+#include "JSString.h"
 #include "../GC/JSCell.h"
 
 namespace JSBackend::Runtime {
@@ -327,7 +330,7 @@ namespace JSBackend::Runtime {
             } else if (value.isNumber()) {
                 return std::to_string(value.asNumber());
             } else if (value.isString()) {
-                throw std::runtime_error("toString for strings not implemented yet");
+                return "\"" + value.asString()->value() + "\"";
             } else if (value.isObject()) {
                 return "[object Object]";
             } else if (value.isFunction()) {

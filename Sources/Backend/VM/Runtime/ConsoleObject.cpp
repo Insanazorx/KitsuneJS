@@ -21,8 +21,8 @@ namespace JSBackend::Runtime {
                 auto cell = arg.asCell();
                 switch (cell->kind()) {
                     case JSCell::Kind::String:
-                        std::cout << "[string] ";//JSString not implemented yet
-                        //std::cout << static_cast<JSString*>(cell)->value() << " ";
+                        std::cout << "[string] ";
+                        std::cout << arg.asString()->value();
                         break;
                     case JSCell::Kind::Object:
                         std::cout << "[object Object] ";

@@ -40,6 +40,8 @@ set(JSBACKEND_PUBLIC_HEADERS
         Sources/Backend/VM/Runtime/ConsoleObject.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.h
         Sources/Backend/VM/Runtime/GlobalObject.cpp
+        Sources/Backend/VM/Runtime/JSString.h
+        Sources/Backend/VM/Runtime/JSStringObject.h
 )
 
 set(JSBACKEND_IDE_ONLY_SOURCES
@@ -81,6 +83,8 @@ add_library(JSBackendCABI SHARED
         Sources/Backend/VM/Runtime/ConsoleObject.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.h
         Sources/Backend/VM/Runtime/GlobalObject.cpp
+        Sources/Backend/VM/Runtime/JSString.h
+        Sources/Backend/VM/Runtime/JSStringObject.h
 )
 
 target_compile_definitions(JSBackendCABI PRIVATE JSBACKEND_BUILDING_DLL)
@@ -129,6 +133,8 @@ add_executable(RunSwift ${JSBACKEND_SOURCE_ROOT}/Tools/RunSwift.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.h
         Sources/Backend/VM/Runtime/GlobalObject.cpp
+        Sources/Backend/VM/Runtime/JSString.h
+        Sources/Backend/VM/Runtime/JSStringObject.h
 )
 add_dependencies(RunSwift BuildSwiftFrontend)
 target_compile_definitions(RunSwift
@@ -161,6 +167,8 @@ add_executable(CLionMainConf ${JSBACKEND_SOURCE_ROOT}/Tools/CLionMainConf.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.cpp
         Sources/Backend/VM/Runtime/ConsoleObject.h
         Sources/Backend/VM/Runtime/GlobalObject.cpp
+        Sources/Backend/VM/Runtime/JSString.h
+        Sources/Backend/VM/Runtime/JSStringObject.h
 )
 target_sources(CLionMainConf PRIVATE ${JSBACKEND_IDE_ONLY_SOURCES})
 target_link_libraries(CLionMainConf PRIVATE JSBackendCABI)

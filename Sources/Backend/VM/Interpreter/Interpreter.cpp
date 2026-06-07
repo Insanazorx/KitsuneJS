@@ -3,6 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 
 #include "Runtime/CallFrame.h"
 #include "Runtime/Environment.h"
@@ -10,12 +11,9 @@
 #include "Runtime/JSValue.h"
 #include "Runtime/JSFunction.h"
 
-
-
-
-
 namespace JSBackend::Interpreter {
 #define DEBUG_INTERPRETER
+#undef DEBUG_INTERPRETER
 
 
     void Interpreter::run() {
@@ -106,7 +104,31 @@ namespace JSBackend::Interpreter {
 #endif
     }
     DECLARE_HANDLER(loadDouble) {}
-    DECLARE_HANDLER(loadString) {}
+    DECLARE_HANDLER(loadString) {
+        assert(inst->OpType() == Bytecode::Op::loadString);
+        assert(m_currentCodeBlock != nullptr);
+
+        const auto stringId = inst->constant();
+
+        auto it = m_currentCodeBlock->constantPool.find(stringId);
+        if (it == m_currentCodeBlock->constantPool.end()) {
+            throw std::runtime_error("String with ID " + std::to_string(stringId) + " not found in constant pool");
+        }
+        const auto& stringValue = it->second;
+
+        std::string sanitizedString = Runtime::JSString::sanitizeHeadAndTail(stringValue);
+
+        auto jsString = vm.allocate<Runtime::JSString>(sanitizedString);
+        auto jsValue = Runtime::JSValue::cell(jsString);
+
+        auto dst = inst->dst();
+        m_registers[dst].write64(jsValue.rawBits());
+
+#ifdef DEBUG_INTERPRETER
+        std::cout<< "loadString: loaded string '" << stringValue << "' into register "
+        << dst << " = " << Runtime::JSValue::toString(Runtime::JSValue::fromRawBits(m_registers[dst].read64())) << "\n";
+#endif
+    }
     DECLARE_HANDLER(loadBigInt) {}
     DECLARE_HANDLER(loadSymbol) {}
     DECLARE_HANDLER(loadConst) {}
@@ -453,18 +475,63 @@ namespace JSBackend::Interpreter {
 
         auto leftReg = inst->lhs();
         auto rightReg = inst->rhs();
+
         auto leftValue = Runtime::JSValue::fromRawBits(m_registers[leftReg].read64());
         auto rightValue = Runtime::JSValue::fromRawBits(m_registers[rightReg].read64());
 
-        auto result = Runtime::JSValue::number(leftValue.asNumber() + rightValue.asNumber());
+        Runtime::JSValue jsResultValue;
         auto dst = inst->dst();
 
-        m_registers[dst].write64(result.rawBits());
+        auto isNumeric = [](const Runtime::JSValue& value) {
+            return value.isInt32() || value.isNumber();
+        };
+
+        auto asNumber = [](const Runtime::JSValue& value) {
+            return value.isInt32()
+                ? static_cast<double>(value.asInt32())
+                : value.asNumber();
+        };
+
+        auto asAddString = [](const Runtime::JSValue& value) -> std::string {
+            if (value.isString()) {
+                return value.asString()->value();
+            }
+            if (value.isInt32()) {
+                return std::to_string(value.asInt32());
+            }
+            if (value.isNumber()) {
+                std::ostringstream stream;
+                stream << value.asNumber();
+                return stream.str();
+            }
+            if (value.isBoolean()) {
+                return value.asBoolean() ? "true" : "false";
+            }
+            if (value.isNull()) {
+                return "null";
+            }
+            if (value.isUndefined()) {
+                return "undefined";
+            }
+            throw std::runtime_error("Unsupported value for string concatenation: " + Runtime::JSValue::toString(value));
+        };
+
+        if (leftValue.isString() || rightValue.isString()) {
+            auto resultStr = asAddString(leftValue) + asAddString(rightValue);
+            auto jsResultStr = vm.allocate<Runtime::JSString>(resultStr);
+            jsResultValue = Runtime::JSValue::cell(jsResultStr);
+        } else if (isNumeric(leftValue) && isNumeric(rightValue)) {
+            jsResultValue = Runtime::JSValue::number(asNumber(leftValue) + asNumber(rightValue));
+        } else {
+            throw std::runtime_error("Unsupported operand types for add: " + Runtime::JSValue::toString(leftValue) + " and " + Runtime::JSValue::toString(rightValue));
+        }
+
+        m_registers[dst].write64(jsResultValue.rawBits());
+
 
 #ifdef DEBUG_INTERPRETER
         std::cout<< "add: added values in registers " << leftReg << " = " << Runtime::JSValue::toString(leftValue)
-        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << ", result is " << result.asNumber()
-        << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
+        << " and " << rightReg << " = " << Runtime::JSValue::toString(rightValue) << " stored in register " << dst << " = " << m_registers[dst].read64() << "\n";
 #endif
     }
     DECLARE_HANDLER(sub) {
